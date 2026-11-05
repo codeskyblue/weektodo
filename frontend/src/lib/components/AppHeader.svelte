@@ -6,7 +6,7 @@
 	import Moon from '@lucide/svelte/icons/moon';
 	import Settings from '@lucide/svelte/icons/settings';
 	import Sun from '@lucide/svelte/icons/sun';
-	import { mode, setMode } from 'mode-watcher';
+	import { setMode, userPrefersMode } from 'mode-watcher';
 	import { app } from '#lib/app.svelte';
 	import { formatRange, formatWeekTitle } from '#lib/date';
 	import Logo from './Logo.svelte';
@@ -30,7 +30,7 @@
 				type="button"
 				class="flex min-w-0 items-center gap-2.5 rounded-md outline-none focus-visible:ring-2 focus-visible:ring-ring"
 				onclick={() => app.goToday()}
-				aria-label="回到本周"
+				aria-label="WeekTodo 首页"
 				title="回到本周"
 			>
 				<Logo size={30} />
@@ -68,7 +68,7 @@
 				</Button>
 				{#if app.week && !app.isCurrentWeek}
 					<Button variant="outline" size="xs" class="ml-1" onclick={() => app.goToday()}>
-						本周
+						回到本周
 					</Button>
 				{/if}
 			</div>
@@ -108,9 +108,9 @@
 					<DropdownMenu.Trigger>
 						{#snippet child({ props })}
 							<Button variant="ghost" size="icon-sm" title="切换主题" {...props}>
-								{#if mode.current === 'dark'}
+								{#if userPrefersMode.current === 'dark'}
 									<Moon />
-								{:else if mode.current === 'light'}
+								{:else if userPrefersMode.current === 'light'}
 									<Sun />
 								{:else}
 									<Monitor />
