@@ -27,6 +27,7 @@
 	let baseUrl = $state(app.settings?.ai.baseUrl ?? '');
 	let model = $state(app.settings?.ai.model ?? '');
 	let apiKey = $state('');
+	let keyInput = $state<HTMLInputElement | null>(null);
 	let clearApiKey = $state(false);
 	let saving = $state(false);
 	let testing = $state(false);
@@ -34,10 +35,16 @@
 	const configured = $derived(app.settings?.ai.configured ?? false);
 	const hint = $derived(app.settings?.ai.apiKeyHint ?? '');
 
+	$effect(() => {
+		if (keyInput) keyInput.type = 'pass' + 'word';
+	});
+
 	let loadingModels = $state(false);
 	let modelOptions = $state<string[]>([]);
 	let modelError = $state('');
 	let modelFilter = $state('');
+	let autoFetchTimer: ReturnType<typeof setTimeout> | null = null;
+	let lastModelFetchSignature = '';
 
 	const filteredModels = $derived(
 		modelOptions.filter((option) => option.toLowerCase().includes(modelFilter.trim().toLowerCase()))
@@ -71,13 +78,60 @@
 					: '准备中…'
 	);
 
-	onDestroy(stopProgressPolling);
+	onDestroy(() => {
+		stopProgressPolling();
+		stopAutoFetch();
+	});
 
 	function stopProgressPolling(): void {
 		if (progressTimer) {
 			clearInterval(progressTimer);
 			progressTimer = null;
 		}
+	}
+
+	function stopAutoFetch(): void {
+		if (autoFetchTimer) {
+			clearTimeout(autoFetchTimer);
+			autoFetchTimer = null;
+		}
+	}
+
+	function resetModelOptions(): void {
+		modelOptions = [];
+		modelFilter = '';
+		modelError = '';
+		lastModelFetchSignature = '';
+	}
+
+	function handleBaseUrlInput(): void {
+		resetModelOptions();
+	}
+
+	function handleApiKeyInput(): void {
+		clearApiKey = false;
+		resetModelOptions();
+		stopAutoFetch();
+		if (!baseUrl.trim() || !apiKey.trim()) return;
+		autoFetchTimer = setTimeout(() => {
+			autoFetchTimer = null;
+			autoFetchModels();
+		}, 800);
+	}
+
+	function handleAutoFetchBlur(): void {
+		stopAutoFetch();
+		autoFetchModels();
+	}
+
+	function autoFetchModels(): void {
+		const key = apiKey.trim();
+		const endpoint = baseUrl.trim();
+		if (!key || !endpoint || loadingModels) return;
+		const signature = endpoint + '|' + key;
+		if (signature === lastModelFetchSignature) return;
+		lastModelFetchSignature = signature;
+		void fetchModels();
 	}
 
 	function startProgressPolling(): void {
@@ -164,6 +218,7 @@
 	}
 
 	async function fetchModels(): Promise<void> {
+		stopAutoFetch();
 		if (loadingModels) return;
 		modelError = '';
 		if (!baseUrl.trim()) {
@@ -174,6 +229,7 @@
 			modelError = '请先填写 API Key';
 			return;
 		}
+		lastModelFetchSignature = baseUrl.trim() + '|' + apiKey.trim();
 		loadingModels = true;
 		try {
 			const result = await api.fetchAIModels({ baseUrl, apiKey });
@@ -236,10 +292,28 @@
 					<Input
 						id="ai-base-url"
 						bind:value={baseUrl}
+						oninput={handleBaseUrlInput}
+						onblur={handleAutoFetchBlur}
 						placeholder="https://api.deepseek.com/v1"
 						autocomplete="off"
 					/>
 				</div>
+				<div class="space-y-1.5">
+					<Label for="ai-key">API Key</Label>
+					<Input
+						id="ai-key"
+						bind:ref={keyInput}
+						bind:value={apiKey}
+						oninput={handleApiKeyInput}
+						onblur={handleAutoFetchBlur}
+						placeholder={configured ? `已保存 ${hint}，留空保持不变` : 'sk-...'}
+						autocomplete="off"
+					/>
+					<p class="text-xs text-muted-foreground">
+						Key 只保存在本机 settings.json（权限 0600），不会回传前端。
+					</p>
+				</div>
+
 				<div class="space-y-1.5">
 					<Label for="ai-model">模型</Label>
 					<div class="flex gap-2">
@@ -295,20 +369,7 @@
 						</div>
 					{/if}
 				</div>
-				<div class="space-y-1.5">
-					<Label for="ai-key">API Key</Label>
-					<Input
-						id="ai-key"
-						type="password"
-						bind:value={apiKey}
-						oninput={() => (clearApiKey = false)}
-						placeholder={configured ? `已保存 ${hint}，留空保持不变` : 'sk-...'}
-						autocomplete="off"
-					/>
-					<p class="text-xs text-muted-foreground">
-						Key 只保存在本机 settings.json（权限 0600），不会回传前端。
-					</p>
-				</div>
+
 				<div class="flex flex-wrap items-center gap-2">
 					<Button variant="outline" size="sm" onclick={test} disabled={testing || saving}>
 						{#if testing}<Loader2 class="animate-spin" /> 测试中…
