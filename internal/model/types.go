@@ -1,0 +1,75 @@
+package model
+
+// Status is the lifecycle state of a task.
+type Status string
+
+const (
+	StatusTodo    Status = "todo"
+	StatusDone    Status = "done"
+	StatusDropped Status = "dropped"
+)
+
+// CarriedFrom records the week and task a task was copied from.
+type CarriedFrom struct {
+	WeekID string `json:"weekId"`
+	TaskID string `json:"taskId"`
+}
+
+// Task is one node in a week's task tree.
+type Task struct {
+	ID          string       `json:"id"`
+	Text        string       `json:"text"`
+	Status      Status       `json:"status"`
+	Day         string       `json:"day,omitempty"` // YYYY-MM-DD inside the week, empty means unplanned
+	CreatedAt   string       `json:"createdAt,omitempty"`
+	CompletedAt string       `json:"completedAt,omitempty"`
+	DroppedAt   string       `json:"droppedAt,omitempty"`
+	CarriedFrom *CarriedFrom `json:"carriedFrom,omitempty"`
+	Children    []*Task      `json:"children"`
+}
+
+// Week is one ISO week of tasks.
+type Week struct {
+	ID        string  `json:"id"`
+	Start     string  `json:"start"` // YYYY-MM-DD, Monday
+	End       string  `json:"end"`   // YYYY-MM-DD, Sunday
+	CreatedAt string  `json:"createdAt,omitempty"`
+	Tasks     []*Task `json:"tasks"`
+}
+
+// Data is the complete persisted document.
+type Data struct {
+	Version int     `json:"version"`
+	Weeks   []*Week `json:"weeks"`
+}
+
+// AIConfig is the persisted OpenAI-compatible endpoint configuration.
+type AIConfig struct {
+	BaseURL string `json:"baseUrl"`
+	APIKey  string `json:"apiKey"`
+	Model   string `json:"model"`
+}
+
+// Settings is stored separately from task data.
+type Settings struct {
+	AI AIConfig `json:"ai"`
+}
+
+// WeekSummary is a lightweight week list entry.
+type WeekSummary struct {
+	ID        string `json:"id"`
+	Start     string `json:"start"`
+	End       string `json:"end"`
+	Total     int    `json:"total"`
+	Done      int    `json:"done"`
+	Dropped   int    `json:"dropped"`
+	Unplanned int    `json:"unplanned"`
+}
+
+// Stats counts leaf tasks in a week.
+type Stats struct {
+	Total     int `json:"total"`
+	Done      int `json:"done"`
+	Dropped   int `json:"dropped"`
+	Unplanned int `json:"unplanned"`
+}

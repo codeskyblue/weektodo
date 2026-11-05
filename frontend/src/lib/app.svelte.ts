@@ -1,0 +1,608 @@
+import { toast } from 'svelte-sonner';
+import * as api from './api';
+import { addDays, weekIdFor, todayISO } from './date';
+import type {
+	CarryPreview,
+	ConfirmOptions,
+	Filter,
+	Meta,
+	ReportMode,
+	SettingsPublic,
+	Stats,
+	Task,
+	TaskRow,
+	Week
+} from './types';
+import {
+	appendChild,
+	completeSubtree,
+	countNodes,
+	countTodoDescendants,
+	dropSubtree,
+	findTask,
+	indentTask,
+	leafStats,
+	locate,
+	moveSibling,
+	newTask,
+	outdentTask,
+	recomputeParents,
+	removeTask,
+	restoreSubtree,
+	siblingInsert,
+	uncompleteSubtree,
+	visibleRows
+} from './tree';
+import { emitWails, onWails } from './wails';
+
+export type SaveStatus = 'saved' | 'saving' | 'error';
+
+export interface ConfirmState extends ConfirmOptions {
+	open: boolean;
+}
+
+const emptyStats = (): Stats => ({ total: 0, done: 0, dropped: 0, unplanned: 0 });
+
+function messageOf(error: unknown): string {
+	if (error instanceof api.ApiError) return error.message;
+	if (error instanceof Error) return error.message;
+	return String(error);
+}
+
+function taskLabel(task: Task): string {
+	const text = task.text.trim();
+	return text || '（无标题任务）';
+}
+
+class AppState {
+	week = $state<Week | null>(null);
+	meta = $state<Meta | null>(null);
+	settings = $state<SettingsPublic | null>(null);
+	currentWeekId = $state(weekIdFor(todayISO()));
+	today = $state(todayISO());
+	filter = $state<Filter>('all');
+	loading = $state(true);
+	navigating = $state(false);
+	error = $state('');
+	saveStatus = $state<SaveStatus>('saved');
+	saveError = $state('');
+	carryBusy = $state(false);
+	settingsOpen = $state(false);
+	reportOpen = $state(false);
+	reportMode = $state<ReportMode>('brief');
+	reportMarkdown = $state('');
+	reportStats = $state<Stats>(emptyStats());
+	reportLoading = $state(false);
+	reportError = $state('');
+	aiMarkdown = $state('');
+	aiLoading = $state(false);
+	confirm = $state<ConfirmState>({
+		open: false,
+		title: '',
+		description: '',
+		confirmLabel: '确定'
+	});
+	quickAddFocus = $state(0);
+	focusRequest = $state<{ id: string; caret: 'start' | 'end'; nonce: number } | null>(null);
+
+	private dirty = false;
+	private saving = false;
+	private revision = 0;
+	private saveTimer: ReturnType<typeof setTimeout> | null = null;
+	private clock: ReturnType<typeof setInterval> | null = null;
+	private focusSeq = 0;
+	private loadSeq = 0;
+	private wailsBound = false;
+
+	get rows(): TaskRow[] {
+		if (!this.week) return [];
+		return visibleRows(this.week.tasks, this.filter, this.today);
+	}
+
+	get stats(): Stats {
+		return this.week ? leafStats(this.week.tasks) : emptyStats();
+	}
+
+	get progress(): number {
+		const stats = this.stats;
+		return stats.total === 0 ? 0 : Math.round((stats.done / stats.total) * 100);
+	}
+
+	get reportText(): string {
+		return this.aiMarkdown || this.reportMarkdown;
+	}
+
+	get isCurrentWeek(): boolean {
+		return this.week?.id === this.currentWeekId;
+	}
+
+	async init(): Promise<void> {
+		this.loading = true;
+		this.error = '';
+		if (!this.wailsBound) {
+			this.wailsBound = true;
+			onWails('weektodo:focus-quick-add', () => {
+				this.quickAddFocus++;
+			});
+			onWails('weektodo:window-hiding', () => {
+				void this.flushSave();
+			});
+		}
+		try {
+			const [meta, settings, weeks] = await Promise.all([
+				api.getMeta(),
+				api.getSettings(),
+				api.listWeeks()
+			]);
+			this.meta = meta;
+			this.settings = settings;
+			this.currentWeekId = weeks.currentWeekId;
+			const wanted = new URLSearchParams(window.location.search).get('week');
+			const initial = wanted && /^\d{4}-W\d{2}$/.test(wanted) ? wanted : meta.currentWeekId;
+			await this.loadWeek(initial);
+			this.startClock();
+		} catch (error) {
+			this.error = messageOf(error);
+		} finally {
+			this.loading = false;
+		}
+	}
+
+	private startClock(): void {
+		if (this.clock) clearInterval(this.clock);
+		this.clock = setInterval(() => {
+			const next = todayISO();
+			if (next === this.today) return;
+			this.today = next;
+			this.currentWeekId = weekIdFor(next);
+		}, 30_000);
+	}
+
+	async loadWeek(id: string): Promise<void> {
+		const token = ++this.loadSeq;
+		this.navigating = true;
+		this.error = '';
+		await this.flushSave();
+		try {
+			// Ensure is idempotent: it returns the week when it already exists.
+			const week: Week = (await api.createWeek(id)).week;
+			if (token !== this.loadSeq) return;
+			this.week = week;
+			this.currentWeekId = this.currentWeekId || weekIdFor(todayISO());
+			this.filter = 'all';
+			this.reportMarkdown = '';
+			this.aiMarkdown = '';
+			this.reportError = '';
+			this.saveStatus = 'saved';
+			this.dirty = false;
+			this.revision++;
+			const url = new URL(window.location.href);
+			url.searchParams.set('week', week.id);
+			window.history.replaceState(null, '', url);
+		} catch (error) {
+			if (token === this.loadSeq) this.error = messageOf(error);
+		} finally {
+			if (token === this.loadSeq) this.navigating = false;
+		}
+	}
+
+	async goToWeek(id: string): Promise<void> {
+		if (id === this.week?.id) return;
+		await this.loadWeek(id);
+	}
+
+	async goToday(): Promise<void> {
+		await this.goToWeek(this.currentWeekId);
+	}
+
+	async goRelative(delta: number): Promise<void> {
+		if (!this.week) return;
+		await this.goToWeek(weekIdFor(addDays(this.week.start, delta * 7)));
+	}
+
+	requestFocus(id: string, caret: 'start' | 'end' = 'end'): void {
+		this.focusRequest = { id, caret, nonce: ++this.focusSeq };
+	}
+
+	markDirty(): void {
+		this.dirty = true;
+		this.revision++;
+		this.saveStatus = 'saving';
+		if (this.saveTimer) clearTimeout(this.saveTimer);
+		this.saveTimer = setTimeout(() => {
+			this.saveTimer = null;
+			void this.flushSave();
+		}, 350);
+	}
+
+	async flushSave(): Promise<void> {
+		if (this.saveTimer) {
+			clearTimeout(this.saveTimer);
+			this.saveTimer = null;
+		}
+		if (!this.week || !this.dirty || this.saving) return;
+		this.dirty = false;
+		this.saving = true;
+		this.saveStatus = 'saving';
+		const weekId = this.week.id;
+		const revision = this.revision;
+		const tasks = JSON.parse(JSON.stringify(this.week.tasks)) as Task[];
+		try {
+			await api.saveWeek(weekId, tasks);
+			if (revision === this.revision) {
+				this.saveStatus = 'saved';
+				this.saveError = '';
+			}
+			emitWails('weektodo:changed');
+		} catch (error) {
+			this.saveStatus = 'error';
+			this.saveError = messageOf(error);
+			toast.error('保存失败', {
+				description: this.saveError,
+				action: {
+					label: '重试',
+					onClick: () => this.retrySave()
+				}
+			});
+		} finally {
+			this.saving = false;
+			if (this.dirty) void this.flushSave();
+		}
+	}
+
+	retrySave(): void {
+		this.dirty = true;
+		void this.flushSave();
+	}
+
+	addTask(options: { text?: string; parentId?: string; day?: string | null } = {}): Task | null {
+		if (!this.week) return null;
+		const day =
+			options.day !== undefined
+				? options.day
+				: this.isCurrentWeek
+					? this.today
+					: null;
+		const task = newTask(options.text ?? '', day);
+		if (options.parentId) {
+			const parent = findTask(this.week.tasks, options.parentId);
+			if (!parent || parent.status === 'dropped') return null;
+			appendChild(parent, task);
+		} else {
+			this.week.tasks.push(task);
+		}
+		recomputeParents(this.week.tasks);
+		if (this.filter === 'done' || this.filter === 'dropped') this.filter = 'all';
+		if (this.filter === 'today' && day !== this.today) this.filter = 'all';
+		this.requestFocus(task.id, 'end');
+		this.markDirty();
+		return task;
+	}
+
+	addSibling(taskId: string): void {
+		if (!this.week) return;
+		const found = locate(this.week.tasks, taskId);
+		if (!found) return;
+		const task = newTask('', found.task.day ?? (this.isCurrentWeek ? this.today : null));
+		siblingInsert(this.week.tasks, taskId, task);
+		recomputeParents(this.week.tasks);
+		this.requestFocus(task.id, 'end');
+		this.markDirty();
+	}
+
+	addChild(taskId: string): void {
+		if (!this.week) return;
+		const found = locate(this.week.tasks, taskId);
+		if (!found || found.task.status === 'dropped') return;
+		const task = newTask('', found.task.day ?? (this.isCurrentWeek ? this.today : null));
+		appendChild(found.task, task);
+		recomputeParents(this.week.tasks);
+		this.requestFocus(task.id, 'end');
+		this.markDirty();
+	}
+
+	updateText(taskId: string, text: string): void {
+		if (!this.week) return;
+		const task = findTask(this.week.tasks, taskId);
+		if (!task) return;
+		task.text = text;
+		this.markDirty();
+	}
+
+	setDay(taskId: string, day: string | null): void {
+		if (!this.week) return;
+		const task = findTask(this.week.tasks, taskId);
+		if (!task) return;
+		if (day && (day < this.week.start || day > this.week.end)) return;
+		if (day) task.day = day;
+		else delete task.day;
+		this.markDirty();
+	}
+
+	toggleTask(taskId: string): void {
+		if (!this.week) return;
+		const found = locate(this.week.tasks, taskId);
+		if (!found) return;
+		const task = found.task;
+		if (task.status === 'dropped') return;
+		const pending = countTodoDescendants(task);
+		if (task.children.length > 0 && pending > 0) {
+			this.askConfirm({
+				title: '完成父任务？',
+				description: `「${taskLabel(task)}」还有 ${pending} 个未完成的子任务。完成后会把这些子任务一起勾选。`,
+				confirmLabel: '全部完成',
+				onConfirm: () => {
+					completeSubtree(task);
+					recomputeParents(this.week!.tasks);
+					this.markDirty();
+				}
+			});
+			return;
+		}
+		if (task.status === 'done') uncompleteSubtree(task);
+		else completeSubtree(task);
+		recomputeParents(this.week.tasks);
+		this.markDirty();
+	}
+
+	dropTask(taskId: string): void {
+		if (!this.week) return;
+		const found = locate(this.week.tasks, taskId);
+		if (!found || found.task.status === 'dropped') return;
+		const task = found.task;
+		const total = countNodes(task);
+		const apply = (): void => {
+			dropSubtree(task);
+			recomputeParents(this.week!.tasks);
+			this.markDirty();
+			toast.success('已废弃', {
+				action: {
+					label: '撤销',
+					onClick: () => this.restoreTask(taskId)
+				}
+			});
+		};
+		if (total > 1) {
+			this.askConfirm({
+				title: '废弃任务？',
+				description: `「${taskLabel(task)}」及其 ${total - 1} 个子任务都会被废弃，且不计入完成率和周报。`,
+				confirmLabel: '废弃',
+				destructive: true,
+				onConfirm: apply
+			});
+			return;
+		}
+		apply();
+	}
+
+	restoreTask(taskId: string): void {
+		if (!this.week) return;
+		const found = locate(this.week.tasks, taskId);
+		if (!found) return;
+		restoreSubtree(found.task);
+		recomputeParents(this.week.tasks);
+		this.markDirty();
+	}
+
+	deleteTask(taskId: string): void {
+		if (!this.week) return;
+		const found = locate(this.week.tasks, taskId);
+		if (!found) return;
+		const task = found.task;
+		const total = countNodes(task);
+		const rows = this.rows;
+		const rowIndex = rows.findIndex((row) => row.task.id === taskId);
+		const fallbackFocus = rowIndex > 0 ? rows[rowIndex - 1].task.id : null;
+		this.askConfirm({
+			title: '删除任务？',
+			description:
+				total > 1
+					? `「${taskLabel(task)}」及其 ${total - 1} 个子任务会被永久删除。`
+					: `「${taskLabel(task)}」会被永久删除。`,
+			confirmLabel: '删除',
+			destructive: true,
+			onConfirm: () => {
+				removeTask(this.week!.tasks, taskId);
+				recomputeParents(this.week!.tasks);
+				if (fallbackFocus) this.requestFocus(fallbackFocus, 'end');
+				this.markDirty();
+			}
+		});
+	}
+
+	removeEmptyTask(taskId: string): void {
+		if (!this.week) return;
+		const found = locate(this.week.tasks, taskId);
+		if (!found) return;
+		if (found.task.text.trim() !== '' || found.task.children.length > 0) return;
+		const rows = this.rows;
+		const rowIndex = rows.findIndex((row) => row.task.id === taskId);
+		const fallbackFocus = rowIndex > 0 ? rows[rowIndex - 1].task.id : null;
+		removeTask(this.week.tasks, taskId);
+		recomputeParents(this.week.tasks);
+		if (fallbackFocus) this.requestFocus(fallbackFocus, 'end');
+		this.markDirty();
+	}
+
+	indent(taskId: string): void {
+		if (!this.week) return;
+		const task = findTask(this.week.tasks, taskId);
+		if (!task) return;
+		if (!indentTask(this.week.tasks, taskId)) return;
+		recomputeParents(this.week.tasks);
+		this.requestFocus(taskId, 'start');
+		this.markDirty();
+	}
+
+	outdent(taskId: string): void {
+		if (!this.week) return;
+		if (!outdentTask(this.week.tasks, taskId)) return;
+		recomputeParents(this.week.tasks);
+		this.requestFocus(taskId, 'start');
+		this.markDirty();
+	}
+
+	move(taskId: string, delta: number): void {
+		if (!this.week) return;
+		if (!moveSibling(this.week.tasks, taskId, delta)) return;
+		this.requestFocus(taskId, 'start');
+		this.markDirty();
+	}
+
+	askConfirm(options: ConfirmOptions): void {
+		this.confirm = {
+			open: true,
+			title: options.title,
+			description: options.description ?? '',
+			confirmLabel: options.confirmLabel ?? '确定',
+			destructive: options.destructive ?? false,
+			onConfirm: options.onConfirm
+		};
+	}
+
+	async confirmAction(): Promise<void> {
+		const action = this.confirm.onConfirm;
+		this.confirm.open = false;
+		await action?.();
+	}
+
+	cancelConfirm(): void {
+		this.confirm.open = false;
+	}
+
+	async openCarryOver(): Promise<void> {
+		if (!this.week || this.carryBusy) return;
+		this.carryBusy = true;
+		try {
+			const preview: CarryPreview = await api.carryPreview(this.week.id);
+			if (preview.reason === 'no_previous_week') {
+				toast.info('上周还没有记录', { description: '没有可以带入的任务。' });
+				return;
+			}
+			if (preview.count === 0) {
+				toast.info(
+					preview.skipped > 0 ? '上周未完成的任务已经全部带入本周' : '上周没有未完成的任务'
+				);
+				return;
+			}
+			const previewText = preview.tasks
+				.slice(0, 6)
+				.map((task) => `${'  '.repeat(task.depth)}· ${task.text || '（无标题任务）'}`)
+				.join('\n');
+			const more = preview.tasks.length > 6 ? `\n… 还有 ${preview.tasks.length - 6} 个` : '';
+			this.askConfirm({
+				title: '带入上周未完成任务',
+				description: `将带入 ${preview.count} 个任务${preview.skipped > 0 ? `，跳过 ${preview.skipped} 个已带入的任务` : ''}：\n\n${previewText}${more}`,
+				confirmLabel: '带入',
+				onConfirm: async () => {
+					const weekId = this.week?.id;
+					if (!weekId) return;
+					this.carryBusy = true;
+					try {
+						const result = await api.carryOver(weekId);
+						this.week = result.week;
+						this.reportMarkdown = '';
+						this.aiMarkdown = '';
+						this.saveStatus = 'saved';
+						this.dirty = false;
+						this.revision++;
+						if (result.created > 0) {
+							toast.success(`已带入 ${result.created} 个任务`, {
+								description: result.skipped > 0 ? `跳过 ${result.skipped} 个已带入的任务` : undefined
+							});
+						} else {
+							toast.info('没有新的任务可带入');
+						}
+						emitWails('weektodo:changed');
+					} catch (error) {
+						toast.error('带入失败', { description: messageOf(error) });
+					} finally {
+						this.carryBusy = false;
+					}
+				}
+			});
+		} catch (error) {
+			toast.error('无法读取上周任务', { description: messageOf(error) });
+		} finally {
+			this.carryBusy = false;
+		}
+	}
+
+	async openReport(): Promise<void> {
+		this.reportOpen = true;
+		await this.refreshReport();
+	}
+
+	async setReportMode(mode: ReportMode): Promise<void> {
+		if (mode === this.reportMode) return;
+		this.reportMode = mode;
+		this.aiMarkdown = '';
+		await this.refreshReport();
+	}
+
+	async refreshReport(): Promise<void> {
+		if (!this.week) return;
+		this.reportLoading = true;
+		this.reportError = '';
+		try {
+			const response = await api.getReport(this.week.id, this.reportMode);
+			this.reportMarkdown = response.markdown;
+			this.reportStats = response.stats;
+		} catch (error) {
+			this.reportError = messageOf(error);
+		} finally {
+			this.reportLoading = false;
+		}
+	}
+
+	async polishReport(): Promise<void> {
+		if (!this.week) return;
+		if (!this.settings?.ai.configured) {
+			this.settingsOpen = true;
+			toast.info('请先配置 AI 接口');
+			return;
+		}
+		this.aiLoading = true;
+		try {
+			const response = await api.polishReport(this.week.id, this.reportMode);
+			this.aiMarkdown = response.markdown;
+			toast.success('AI 周报已生成');
+		} catch (error) {
+			toast.error('AI 润色失败', { description: messageOf(error) });
+		} finally {
+			this.aiLoading = false;
+		}
+	}
+
+	clearAIReport(): void {
+		this.aiMarkdown = '';
+	}
+
+	async saveAISettings(draft: api.SettingsDraft): Promise<boolean> {
+		try {
+			this.settings = await api.saveSettings(draft);
+			toast.success('设置已保存');
+			return true;
+		} catch (error) {
+			toast.error('保存设置失败', { description: messageOf(error) });
+			return false;
+		}
+	}
+
+	async testAISettings(draft: { baseUrl: string; model: string; apiKey: string }): Promise<boolean> {
+		try {
+			await api.testAI(draft);
+			toast.success('AI 连接成功');
+			return true;
+		} catch (error) {
+			toast.error('AI 连接失败', { description: messageOf(error) });
+			return false;
+		}
+	}
+
+	focusQuickAdd(): void {
+		this.quickAddFocus++;
+	}
+}
+
+export const app = new AppState();
