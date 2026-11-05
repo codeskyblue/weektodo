@@ -25,6 +25,7 @@ import {
 	locate,
 	moveSibling,
 	newTask,
+	nowISO,
 	outdentTask,
 	recomputeParents,
 	removeTask,
@@ -312,6 +313,7 @@ class AppState {
 		const task = findTask(this.week.tasks, taskId);
 		if (!task) return;
 		task.text = text;
+		task.updatedAt = nowISO();
 		this.markDirty();
 	}
 
@@ -322,6 +324,7 @@ class AppState {
 		if (day && (day < this.week.start || day > this.week.end)) return;
 		if (day) task.day = day;
 		else delete task.day;
+		task.updatedAt = nowISO();
 		this.markDirty();
 	}
 
@@ -435,6 +438,7 @@ class AppState {
 		const task = findTask(this.week.tasks, taskId);
 		if (!task) return;
 		if (!indentTask(this.week.tasks, taskId)) return;
+		task.updatedAt = nowISO();
 		recomputeParents(this.week.tasks);
 		this.requestFocus(taskId, 'start');
 		this.markDirty();
@@ -443,6 +447,8 @@ class AppState {
 	outdent(taskId: string): void {
 		if (!this.week) return;
 		if (!outdentTask(this.week.tasks, taskId)) return;
+		const task = findTask(this.week.tasks, taskId);
+		if (task) task.updatedAt = nowISO();
 		recomputeParents(this.week.tasks);
 		this.requestFocus(taskId, 'start');
 		this.markDirty();
@@ -451,6 +457,8 @@ class AppState {
 	move(taskId: string, delta: number): void {
 		if (!this.week) return;
 		if (!moveSibling(this.week.tasks, taskId, delta)) return;
+		const task = findTask(this.week.tasks, taskId);
+		if (task) task.updatedAt = nowISO();
 		this.requestFocus(taskId, 'start');
 		this.markDirty();
 	}
@@ -596,7 +604,7 @@ class AppState {
 		}
 	}
 
-	async saveAISettings(draft: api.SettingsDraft): Promise<boolean> {
+	async saveSettings(draft: api.SettingsDraft): Promise<boolean> {
 		try {
 			this.settings = await api.saveSettings(draft);
 			toast.success(t('设置已保存'));
@@ -615,6 +623,39 @@ class AppState {
 		} catch (error) {
 			toast.error(t('AI 连接失败'), { description: messageOf(error) });
 			return false;
+		}
+	}
+
+	async testWebDAVSettings(draft: api.WebDAVDraft): Promise<boolean> {
+		try {
+			await api.testWebDAV(draft);
+			toast.success(t('WebDAV 连接成功'));
+			return true;
+		} catch (error) {
+			toast.error(t('WebDAV 连接失败'), { description: messageOf(error) });
+			return false;
+		}
+	}
+
+	async syncWebDAV(draft: api.WebDAVDraft): Promise<api.WebDAVSyncResult | null> {
+		const weekID = this.week?.id;
+		await this.flushSave();
+		try {
+			const result = await api.syncWebDAV(draft);
+			toast.success(
+				t('同步完成：{weeks} 周 / {tasks} 个任务', {
+					weeks: result.weeks,
+					tasks: result.tasks
+				})
+			);
+			if (weekID) {
+				this.dirty = false;
+				await this.loadWeek(weekID);
+			}
+			return result;
+		} catch (error) {
+			toast.error(t('同步失败'), { description: messageOf(error) });
+			return null;
 		}
 	}
 

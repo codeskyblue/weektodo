@@ -91,6 +91,9 @@ func normalizeTask(t *model.Task, start, end string, now time.Time, depth int, i
 	if !validTimestamp(t.CreatedAt) {
 		t.CreatedAt = now.Format(time.RFC3339)
 	}
+	if !validTimestamp(t.UpdatedAt) {
+		t.UpdatedAt = t.CreatedAt
+	}
 	if !validTimestamp(t.CompletedAt) {
 		t.CompletedAt = ""
 	}

@@ -11,6 +11,7 @@ export interface Task {
 	status: TaskStatus;
 	day?: string;
 	createdAt?: string;
+	updatedAt?: string;
 	completedAt?: string;
 	droppedAt?: string;
 	carriedFrom?: CarriedFrom;
@@ -49,8 +50,17 @@ export interface AIPublic {
 	apiKeyHint: string;
 }
 
+export interface WebDAVPublic {
+	url: string;
+	username: string;
+	remoteDir: string;
+	hasPassword: boolean;
+	passwordHint: string;
+}
+
 export interface SettingsPublic {
 	ai: AIPublic;
+	webdav: WebDAVPublic;
 	language?: 'zh' | 'en';
 }
 

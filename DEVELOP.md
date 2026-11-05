@@ -136,6 +136,15 @@ npm run build
 
 `cmd/update-manifest` 从 `SHA256SUMS`、release notes 和发布时间生成 `update.json`，供应用检查更新。
 
+## WebDAV 同步
+
+- `internal/webdav`：Basic Auth 客户端，负责 `PROPFIND` 测试、`MKCOL` 建目录、`GET` / `PUT` 文件。
+- `internal/todo/merge.go`：按任务 ID 和更新时间合并两份 JSON，子任务取并集。
+- `POST /api/webdav/test`：用草稿配置（空密码沿用已保存密码）测试连接。
+- `POST /api/webdav/sync`：`Snapshot` 本地数据 → 下载远端 `data.json` → `MergeData` → `ReplaceData` → 上传合并结果；远端 JSON 解析失败时不修改任何数据。
+- 配置保存在 `settings.json` 的 `webdav` 字段，密码不会通过 `GET /api/settings` 返回，只返回末四位提示。
+- 同步失败会保留本地数据；上传失败时本地已写入合并结果，可以再次同步重试。
+
 ## 桌面构建
 
 ```bash
@@ -154,5 +163,5 @@ Dock、Cmd+Tab 和菜单栏；关闭窗口后切换为 Accessory，从 Dock/Cmd+
 - `tray.SetTemplateIcon` 显示单色模板图标
 - `tray.SetLabel` 显示今天未完成叶子任务数
 - 前端保存成功后发送 `weektodo:changed` 事件，桌面进程刷新数量
-- 另每 60 秒兜底刷新
+- 另每 2 秒轮询本地 store 兜底刷新（事件可能丢失）
 - 关闭窗口时发送 `weektodo:window-hiding`，前端先 flush 未保存内容

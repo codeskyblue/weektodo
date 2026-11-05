@@ -9,12 +9,14 @@ import (
 	"github.com/uiautodev/weektodo/internal/ai"
 	"github.com/uiautodev/weektodo/internal/i18n"
 	"github.com/uiautodev/weektodo/internal/model"
+	"github.com/uiautodev/weektodo/internal/webdav"
 )
 
 func (s *Server) handleGetSettings(w http.ResponseWriter, _ *http.Request) {
 	settings := s.store.Settings()
 	writeJSON(w, http.StatusOK, map[string]any{
 		"ai":       publicAI(settings.AI),
+		"webdav":   publicWebDAV(settings.WebDAV),
 		"language": settings.Language,
 	})
 }
@@ -27,6 +29,13 @@ func (s *Server) handleSaveSettings(w http.ResponseWriter, r *http.Request) {
 			APIKey      *string `json:"apiKey"`
 			ClearAPIKey bool    `json:"clearApiKey"`
 		} `json:"ai"`
+		WebDAV struct {
+			URL           *string `json:"url"`
+			Username      *string `json:"username"`
+			Password      *string `json:"password"`
+			RemoteDir     *string `json:"remoteDir"`
+			ClearPassword bool    `json:"clearPassword"`
+		} `json:"webdav"`
 		Language *string `json:"language"`
 	}
 	if err := decodeJSON(w, r, &body); err != nil {
@@ -45,6 +54,26 @@ func (s *Server) handleSaveSettings(w http.ResponseWriter, r *http.Request) {
 	} else if body.AI.APIKey != nil && strings.TrimSpace(*body.AI.APIKey) != "" {
 		current.AI.APIKey = *body.AI.APIKey
 	}
+	if body.WebDAV.URL != nil {
+		current.WebDAV.URL = *body.WebDAV.URL
+	}
+	if body.WebDAV.Username != nil {
+		current.WebDAV.Username = *body.WebDAV.Username
+	}
+	if body.WebDAV.RemoteDir != nil {
+		current.WebDAV.RemoteDir = *body.WebDAV.RemoteDir
+	}
+	if body.WebDAV.ClearPassword {
+		current.WebDAV.Password = ""
+	} else if body.WebDAV.Password != nil && strings.TrimSpace(*body.WebDAV.Password) != "" {
+		current.WebDAV.Password = *body.WebDAV.Password
+	}
+	if strings.TrimSpace(current.WebDAV.URL) != "" {
+		if err := webdav.Validate(current.WebDAV, responseLanguage(w)); err != nil {
+			writeError(w, http.StatusBadRequest, "invalid_webdav", err.Error())
+			return
+		}
+	}
 	if body.Language != nil {
 		if lang := i18n.Normalize(*body.Language); lang != "" {
 			current.Language = string(lang)
@@ -57,6 +86,7 @@ func (s *Server) handleSaveSettings(w http.ResponseWriter, r *http.Request) {
 	settings := s.store.Settings()
 	writeJSON(w, http.StatusOK, map[string]any{
 		"ai":       publicAI(settings.AI),
+		"webdav":   publicWebDAV(settings.WebDAV),
 		"language": settings.Language,
 	})
 }
@@ -150,4 +180,14 @@ func keyHint(key string) string {
 		return "••••"
 	}
 	return "••••" + string(runes[len(runes)-4:])
+}
+
+func publicWebDAV(cfg model.WebDAVConfig) map[string]any {
+	return map[string]any{
+		"url":          cfg.URL,
+		"username":     cfg.Username,
+		"remoteDir":    cfg.RemoteDir,
+		"hasPassword":  strings.TrimSpace(cfg.Password) != "",
+		"passwordHint": keyHint(cfg.Password),
+	}
 }

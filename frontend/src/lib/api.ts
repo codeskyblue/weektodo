@@ -96,26 +96,60 @@ export function getSettings(): Promise<SettingsPublic> {
 	return request('/settings');
 }
 
-export interface SettingsDraft {
+export interface AIDraft {
 	baseUrl: string;
 	model: string;
 	apiKey: string;
 	clearApiKey: boolean;
 }
 
+export interface WebDAVDraft {
+	url: string;
+	username: string;
+	password: string;
+	remoteDir: string;
+}
+
+export interface SettingsDraft {
+	ai?: AIDraft;
+	webdav?: WebDAVDraft & { clearPassword?: boolean };
+}
+
+export interface WebDAVSyncResult {
+	ok: boolean;
+	weeks: number;
+	tasks: number;
+	remotePath: string;
+	uploaded: boolean;
+}
+
 export function saveSettings(draft: SettingsDraft): Promise<SettingsPublic> {
 	return request('/settings', {
 		method: 'PUT',
-		body: JSON.stringify({ ai: draft })
+		body: JSON.stringify(draft)
 	});
 }
 
-export function testAI(draft: Pick<SettingsDraft, 'baseUrl' | 'model' | 'apiKey'>): Promise<{
+export function testAI(draft: Pick<AIDraft, 'baseUrl' | 'model' | 'apiKey'>): Promise<{
 	ok: boolean;
 	message: string;
 	model: string;
 }> {
 	return request('/settings/ai/test', {
+		method: 'POST',
+		body: JSON.stringify(draft)
+	});
+}
+
+export function testWebDAV(draft: WebDAVDraft): Promise<{ ok: boolean }> {
+	return request('/webdav/test', {
+		method: 'POST',
+		body: JSON.stringify(draft)
+	});
+}
+
+export function syncWebDAV(draft: WebDAVDraft): Promise<WebDAVSyncResult> {
+	return request('/webdav/sync', {
 		method: 'POST',
 		body: JSON.stringify(draft)
 	});

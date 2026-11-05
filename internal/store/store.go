@@ -66,6 +66,40 @@ func (s *Store) Dir() string {
 	return s.dir
 }
 
+// Snapshot returns a deep copy of all weeks.
+func (s *Store) Snapshot() model.Data {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return todo.CloneData(s.data)
+}
+
+// ReplaceData atomically replaces all weeks, normalizes them and persists once.
+func (s *Store) ReplaceData(data model.Data) (model.Data, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	next := todo.CloneData(data)
+	if next.Version == 0 {
+		next.Version = 1
+	}
+	if next.Weeks == nil {
+		next.Weeks = []*model.Week{}
+	}
+	for _, week := range next.Weeks {
+		if week == nil {
+			continue
+		}
+		if err := todo.NormalizeWeek(week, time.Now()); err != nil {
+			return model.Data{}, err
+		}
+	}
+	sort.Slice(next.Weeks, func(i, j int) bool { return next.Weeks[i].Start < next.Weeks[j].Start })
+	s.data = next
+	if err := s.saveDataLocked(); err != nil {
+		return model.Data{}, err
+	}
+	return todo.CloneData(next), nil
+}
+
 // Week returns one week by id.
 func (s *Store) Week(id string) (*model.Week, bool) {
 	s.mu.RLock()
@@ -174,6 +208,10 @@ func (s *Store) UpdateSettings(next model.Settings) error {
 	next.AI.BaseURL = strings.TrimRight(strings.TrimSpace(next.AI.BaseURL), "/")
 	next.AI.Model = strings.TrimSpace(next.AI.Model)
 	next.AI.APIKey = strings.TrimSpace(next.AI.APIKey)
+	next.WebDAV.URL = strings.TrimRight(strings.TrimSpace(next.WebDAV.URL), "/")
+	next.WebDAV.Username = strings.TrimSpace(next.WebDAV.Username)
+	next.WebDAV.Password = strings.TrimSpace(next.WebDAV.Password)
+	next.WebDAV.RemoteDir = strings.Trim(strings.TrimSpace(next.WebDAV.RemoteDir), "/")
 	s.settings = next
 	return s.saveSettingsLocked()
 }

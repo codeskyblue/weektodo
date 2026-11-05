@@ -10,7 +10,8 @@ export function newTask(text = '', day: string | null = null): Task {
 		text,
 		status: 'todo',
 		children: [],
-		createdAt: nowISO()
+		createdAt: nowISO(),
+		updatedAt: nowISO()
 	};
 	if (day) task.day = day;
 	return task;
@@ -107,6 +108,7 @@ export function isIndeterminate(task: Task): boolean {
 export function completeSubtree(task: Task, at = nowISO()): void {
 	if (task.status === 'dropped') return;
 	task.status = 'done';
+	task.updatedAt = at;
 	task.completedAt ||= at;
 	for (const child of task.children) {
 		completeSubtree(child, at);
@@ -116,6 +118,7 @@ export function completeSubtree(task: Task, at = nowISO()): void {
 export function uncompleteSubtree(task: Task): void {
 	if (task.status === 'dropped') return;
 	task.status = 'todo';
+	task.updatedAt = nowISO();
 	task.completedAt = '';
 	for (const child of task.children) {
 		uncompleteSubtree(child);
@@ -124,6 +127,7 @@ export function uncompleteSubtree(task: Task): void {
 
 export function dropSubtree(task: Task, at = nowISO()): void {
 	task.status = 'dropped';
+	task.updatedAt = at;
 	task.droppedAt ||= at;
 	task.completedAt = '';
 	for (const child of task.children) {
@@ -133,6 +137,7 @@ export function dropSubtree(task: Task, at = nowISO()): void {
 
 export function restoreSubtree(task: Task): void {
 	task.status = 'todo';
+	task.updatedAt = nowISO();
 	task.droppedAt = '';
 	task.completedAt = '';
 	for (const child of task.children) {
@@ -145,7 +150,10 @@ export function recomputeParents(tasks: Task[], at = nowISO()): void {
 		recomputeParents(task.children, at);
 		if (task.status === 'dropped') continue;
 		if (task.children.length === 0) {
-			if (task.status === 'done' && !task.completedAt) task.completedAt = at;
+			if (task.status === 'done' && !task.completedAt) {
+				task.completedAt = at;
+				task.updatedAt = at;
+			}
 			if (task.status !== 'done') task.completedAt = '';
 			continue;
 		}
@@ -155,6 +163,8 @@ export function recomputeParents(tasks: Task[], at = nowISO()): void {
 			continue;
 		}
 		const allDone = active.every((child) => child.status === 'done');
+		const previousStatus = task.status;
+		const previousCompleted = task.completedAt;
 		if (allDone) {
 			task.status = 'done';
 			const latest = active
@@ -166,6 +176,9 @@ export function recomputeParents(tasks: Task[], at = nowISO()): void {
 		} else {
 			task.status = 'todo';
 			task.completedAt = '';
+		}
+		if (task.status !== previousStatus || task.completedAt !== previousCompleted) {
+			task.updatedAt = at;
 		}
 	}
 }

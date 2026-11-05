@@ -23,7 +23,7 @@ const en: Record<string, string> = {
 	'深色': 'Dark',
 	'跟随系统': 'Follow system',
 	'设置': 'Settings',
-	'配置 AI 周报润色和界面外观。': 'Configure AI report polishing and appearance.',
+	'配置 AI 周报润色、WebDAV 同步和界面外观。': 'Configure AI report polishing, WebDAV sync and appearance.',
 	'AI 周报润色': 'AI report polishing',
 	'兼容 OpenAI 的 /chat/completions 接口。': 'OpenAI-compatible /chat/completions endpoint.',
 	'模型': 'Model',
@@ -180,6 +180,28 @@ const en: Record<string, string> = {
 	'路径已复制': 'Path copied',
 	'复制失败': 'Copy failed',
 	'检查更新失败': 'Update check failed',
+
+	// WebDAV
+	'WebDAV 同步': 'WebDAV sync',
+	'将 data.json 同步到远端目录，本地和远端会双向合并。':
+		'Sync data.json to a remote folder; local and remote changes are merged both ways.',
+	'WebDAV 地址': 'WebDAV URL',
+	'用户名': 'Username',
+	'密码': 'Password',
+	'远端目录': 'Remote folder',
+	'远端目录留空时同步到 WebDAV 根目录。': 'Leave the remote folder empty to sync to the WebDAV root.',
+	'密码只保存在本机 settings.json（权限 0600），不会回传前端。':
+		'The password is stored only in local settings.json (mode 0600) and is never sent back to the frontend.',
+	'同步会按任务更新时间合并，较新的修改优先。':
+		'Sync merges tasks by update time; newer edits win.',
+	'立即同步': 'Sync now',
+	'同步中…': 'Syncing…',
+	'WebDAV 连接成功': 'WebDAV connection successful',
+	'WebDAV 连接失败': 'WebDAV connection failed',
+	'同步完成：{weeks} 周 / {tasks} 个任务': 'Sync complete · weeks: {weeks} / tasks: {tasks}',
+	'同步失败': 'Sync failed',
+	'清除已保存的密码': 'Clear saved password',
+	'保存后将清除密码': 'The password will be cleared on save',
 
 	// Dates
 	'{year} 第 {week} 周': 'Week {week}, {year}'

@@ -22,6 +22,7 @@ type Task struct {
 	Status      Status       `json:"status"`
 	Day         string       `json:"day,omitempty"` // YYYY-MM-DD inside the week, empty means unplanned
 	CreatedAt   string       `json:"createdAt,omitempty"`
+	UpdatedAt   string       `json:"updatedAt,omitempty"`
 	CompletedAt string       `json:"completedAt,omitempty"`
 	DroppedAt   string       `json:"droppedAt,omitempty"`
 	CarriedFrom *CarriedFrom `json:"carriedFrom,omitempty"`
@@ -50,10 +51,19 @@ type AIConfig struct {
 	Model   string `json:"model"`
 }
 
+// WebDAVConfig is the persisted WebDAV endpoint configuration.
+type WebDAVConfig struct {
+	URL       string `json:"url"`
+	Username  string `json:"username"`
+	Password  string `json:"password"`
+	RemoteDir string `json:"remoteDir"`
+}
+
 // Settings is stored separately from task data.
 type Settings struct {
-	AI       AIConfig `json:"ai"`
-	Language string   `json:"language,omitempty"`
+	AI       AIConfig     `json:"ai"`
+	WebDAV   WebDAVConfig `json:"webdav"`
+	Language string       `json:"language,omitempty"`
 }
 
 // WeekSummary is a lightweight week list entry.

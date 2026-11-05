@@ -40,6 +40,45 @@
 		if (keyInput) keyInput.type = 'pass' + 'word';
 	});
 
+	let davUrl = $state(app.settings?.webdav.url ?? '');
+	let davUsername = $state(app.settings?.webdav.username ?? '');
+	let davRemoteDir = $state(app.settings?.webdav.remoteDir ?? '');
+	let davPassword = $state('');
+	let davPasswordInput = $state<HTMLInputElement | null>(null);
+	let clearDavPassword = $state(false);
+	let davTesting = $state(false);
+	let davSyncing = $state(false);
+
+	const davHasPassword = $derived(app.settings?.webdav.hasPassword ?? false);
+	const davHint = $derived(app.settings?.webdav.passwordHint ?? '');
+
+	$effect(() => {
+		if (davPasswordInput) davPasswordInput.type = 'pass' + 'word';
+	});
+
+	function davDraft(): api.WebDAVDraft {
+		return {
+			url: davUrl,
+			username: davUsername,
+			password: davPassword,
+			remoteDir: davRemoteDir
+		};
+	}
+
+	async function testWebDAV(): Promise<void> {
+		if (davTesting || davSyncing) return;
+		davTesting = true;
+		await app.testWebDAVSettings(davDraft());
+		davTesting = false;
+	}
+
+	async function syncWebDAV(): Promise<void> {
+		if (davTesting || davSyncing) return;
+		davSyncing = true;
+		await app.syncWebDAV(davDraft());
+		davSyncing = false;
+	}
+
 	let loadingModels = $state(false);
 	let modelOptions = $state<string[]>([]);
 	let modelError = $state('');
@@ -204,11 +243,16 @@
 
 	async function save(): Promise<void> {
 		saving = true;
-		const ok = await app.saveAISettings({ baseUrl, model, apiKey, clearApiKey });
+		const ok = await app.saveSettings({
+			ai: { baseUrl, model, apiKey, clearApiKey },
+			webdav: { ...davDraft(), clearPassword: clearDavPassword }
+		});
 		saving = false;
 		if (ok) {
 			apiKey = '';
 			clearApiKey = false;
+			davPassword = '';
+			clearDavPassword = false;
 		}
 	}
 
@@ -269,7 +313,7 @@
 	<Dialog.Content class="max-h-[88vh] overflow-y-auto sm:max-w-lg">
 		<Dialog.Header>
 			<Dialog.Title>{t('设置')}</Dialog.Title>
-			<Dialog.Description>{t('配置 AI 周报润色和界面外观。')}</Dialog.Description>
+			<Dialog.Description>{t('配置 AI 周报润色、WebDAV 同步和界面外观。')}</Dialog.Description>
 		</Dialog.Header>
 
 		<div class="space-y-6 py-1">
@@ -393,6 +437,101 @@
 						<span class="text-xs text-destructive">{t('保存后将清除 Key')}</span>
 					{/if}
 				</div>
+			</section>
+
+			<Separator />
+
+			<section class="space-y-3">
+				<div>
+					<h3 class="text-sm font-medium">{t('WebDAV 同步')}</h3>
+					<p class="mt-0.5 text-xs text-muted-foreground">
+						{t('将 data.json 同步到远端目录，本地和远端会双向合并。')}
+					</p>
+				</div>
+
+				<div class="space-y-1.5">
+					<Label for="dav-url">{t('WebDAV 地址')}</Label>
+					<Input
+						id="dav-url"
+						bind:value={davUrl}
+						placeholder="https://dav.example.com/remote.php/dav/files/me"
+						autocomplete="off"
+					/>
+				</div>
+
+				<div class="grid gap-3 sm:grid-cols-2">
+					<div class="space-y-1.5">
+						<Label for="dav-username">{t('用户名')}</Label>
+						<Input id="dav-username" bind:value={davUsername} autocomplete="off" />
+					</div>
+					<div class="space-y-1.5">
+						<Label for="dav-password">{t('密码')}</Label>
+						<Input
+							id="dav-password"
+							bind:ref={davPasswordInput}
+							bind:value={davPassword}
+							placeholder={davHasPassword
+								? t('已保存 {hint}，留空保持不变', { hint: davHint })
+								: ''}
+							autocomplete="off"
+						/>
+					</div>
+				</div>
+				<p class="text-xs text-muted-foreground">
+					{t('密码只保存在本机 settings.json（权限 0600），不会回传前端。')}
+				</p>
+
+				<div class="space-y-1.5">
+					<Label for="dav-dir">{t('远端目录')}</Label>
+					<Input
+						id="dav-dir"
+						bind:value={davRemoteDir}
+						placeholder="weektodo"
+						autocomplete="off"
+					/>
+					<p class="text-xs text-muted-foreground">
+						{t('远端目录留空时同步到 WebDAV 根目录。')}
+					</p>
+				</div>
+
+				<div class="flex flex-wrap items-center gap-2">
+					<Button
+						variant="outline"
+						size="sm"
+						onclick={testWebDAV}
+						disabled={davTesting || davSyncing}
+					>
+						{#if davTesting}<Loader2 class="animate-spin" /> {t('测试中…')}
+						{:else}{t('测试连接')}{/if}
+					</Button>
+					<Button
+						size="sm"
+						onclick={syncWebDAV}
+						disabled={davTesting || davSyncing || !davUrl.trim()}
+					>
+						{#if davSyncing}<Loader2 class="animate-spin" /> {t('同步中…')}
+						{:else}<RefreshCw /> {t('立即同步')}{/if}
+					</Button>
+					{#if davHasPassword}
+						<Button
+							variant="ghost"
+							size="sm"
+							class="text-muted-foreground"
+							onclick={() => {
+								clearDavPassword = true;
+								davPassword = '';
+							}}
+						>
+							{t('清除已保存的密码')}
+						</Button>
+					{/if}
+					{#if clearDavPassword}
+						<span class="text-xs text-destructive">{t('保存后将清除密码')}</span>
+					{/if}
+				</div>
+				<p class="text-xs text-muted-foreground">
+					{t('同步会按任务更新时间合并，较新的修改优先。')}
+				</p>
 			</section>
 
 			<Separator />

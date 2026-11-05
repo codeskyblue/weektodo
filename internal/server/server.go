@@ -34,6 +34,7 @@ type Server struct {
 	options  Options
 	mux      *http.ServeMux
 	updateMu sync.Mutex
+	webdavMu sync.Mutex
 }
 
 // New creates the HTTP server.
@@ -62,6 +63,8 @@ func (s *Server) routes() {
 	s.mux.HandleFunc("PUT /api/settings", s.handleSaveSettings)
 	s.mux.HandleFunc("POST /api/settings/ai/test", s.handleTestAI)
 	s.mux.HandleFunc("POST /api/settings/ai/models", s.handleAIModels)
+	s.mux.HandleFunc("POST /api/webdav/test", s.handleTestWebDAV)
+	s.mux.HandleFunc("POST /api/webdav/sync", s.handleSyncWebDAV)
 	s.mux.HandleFunc("GET /api/update/check", s.handleUpdateCheck)
 	s.mux.HandleFunc("POST /api/update/apply", s.handleUpdateApply)
 	s.mux.HandleFunc("GET /api/update/status", s.handleUpdateStatus)
