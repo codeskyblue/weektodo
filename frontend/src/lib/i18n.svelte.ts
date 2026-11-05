@@ -200,7 +200,8 @@ const en: Record<string, string> = {
 	'用户名': 'Username',
 	'密码': 'Password',
 	'远端目录': 'Remote folder',
-	'远端目录留空时同步到 WebDAV 根目录。': 'Leave the remote folder empty to sync to the WebDAV root.',
+	'相对于 WebDAV 地址，开头的 / 可省略；留空时同步到地址根目录。':
+		'Relative to the WebDAV URL; a leading / is optional. Leave it empty to sync to the URL root.',
 	'密码只保存在本机 settings.json（权限 0600），不会回传前端。':
 		'The password is stored only in local settings.json (mode 0600) and is never sent back to the frontend.',
 	'同步会按任务更新时间合并，较新的修改优先。':

@@ -23,11 +23,11 @@
 
 ## WebDAV 同步
 
-1. 打开设置，填写 WebDAV 地址（例如 `https://dav.example.com/remote.php/dav/files/me`）、用户名、密码和远端目录。
+1. 打开设置，填写 WebDAV 地址（例如 `https://dav.example.com/remote.php/dav/files/me`）、用户名、密码和远端目录（相对于 WebDAV 地址，开头的 `/` 可省略）。
 2. 点「测试连接」确认地址和账号可用。
 3. 点「立即同步」把本地 `data.json` 与 `远端目录/weektodo.json` 合并后写回两边。
 
-同步使用 Basic Auth，并优先对远端目录发 `PROPFIND`；目录不存在时会回退到地址本身，部分服务器不支持 `PROPFIND` 时改用 `OPTIONS`。同步为手动触发，首次同步会自动创建远端目录。
+远端目录在设置中统一显示为 `/weektodo` 这类形式，实际仍相对于 WebDAV 地址拼接。同步使用 Basic Auth，并优先对远端目录发 `PROPFIND`；目录不存在时会回退到地址本身，部分服务器不支持 `PROPFIND` 时改用 `OPTIONS`。同步为手动触发，首次同步会自动创建远端目录。
 
 合并按任务 ID 进行：同一任务比较 `updatedAt` / `completedAt` / `droppedAt` / `createdAt`，较新的修改获胜；子任务取并集，所以两端新建的任务都会保留。目前没有删除墓碑，已删除的任务可能从另一端重新出现。
 

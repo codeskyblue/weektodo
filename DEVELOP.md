@@ -159,6 +159,7 @@ Release Notes 由 `scripts/release-notes.sh` 从上一个 tag 到当前 tag 的�
 - `POST /api/webdav/test`：用草稿配置（空密码沿用已保存密码）测试连接。
 - `POST /api/webdav/sync`：`Snapshot` 本地数据 → 下载远端 `weektodo.json` → `MergeData` → `ReplaceData` → 上传合并结果；远端 JSON 解析失败时不修改任何数据。
 - 配置保存在 `settings.json` 的 `webdav` 字段，密码不会通过 `GET /api/settings` 返回，只返回末四位提示。
+- `remoteDir` 保存时统一加前导 `/`（如 `/weektodo`）用于展示，实际仍相对于 WebDAV 地址拼接。
 - 同步失败会保留本地数据；上传失败时本地已写入合并结果，可以再次同步重试。
 
 ## 桌面构建

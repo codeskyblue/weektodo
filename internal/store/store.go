@@ -385,7 +385,7 @@ func (s *Store) UpdateSettings(next model.Settings) error {
 	next.WebDAV.URL = strings.TrimRight(strings.TrimSpace(next.WebDAV.URL), "/")
 	next.WebDAV.Username = strings.TrimSpace(next.WebDAV.Username)
 	next.WebDAV.Password = strings.TrimSpace(next.WebDAV.Password)
-	next.WebDAV.RemoteDir = strings.Trim(strings.TrimSpace(next.WebDAV.RemoteDir), "/")
+	next.WebDAV.RemoteDir = normalizeRemoteDir(next.WebDAV.RemoteDir)
 	next.WeekSpan = normalizeWeekSpan(next.WeekSpan)
 	s.settings = next
 	return s.saveSettingsLocked()
@@ -450,6 +450,7 @@ func (s *Store) loadSettings() error {
 		return fmt.Errorf("parse %s: %w", path, err)
 	}
 	parsed.WeekSpan = normalizeWeekSpan(parsed.WeekSpan)
+	parsed.WebDAV.RemoteDir = normalizeRemoteDir(parsed.WebDAV.RemoteDir)
 	s.settings = parsed
 	return nil
 }
@@ -459,6 +460,16 @@ func normalizeWeekSpan(value int) int {
 		return value
 	}
 	return 1
+}
+
+// normalizeRemoteDir keeps one leading slash for display while the WebDAV
+// client still treats the path as relative to the configured URL.
+func normalizeRemoteDir(value string) string {
+	value = strings.Trim(strings.TrimSpace(value), "/")
+	if value == "" {
+		return ""
+	}
+	return "/" + value
 }
 
 func (s *Store) loadLatestBackup() (model.Data, bool) {

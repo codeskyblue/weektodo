@@ -100,7 +100,7 @@ func TestWebDAVSettingsAreRedacted(t *testing.T) {
 	webdav := settings["webdav"].(map[string]any)
 	if webdav["url"] != "https://dav.example.com/dav" ||
 		webdav["username"] != "alice" ||
-		webdav["remoteDir"] != "weektodo" ||
+		webdav["remoteDir"] != "/weektodo" ||
 		webdav["hasPassword"] != true ||
 		webdav["passwordHint"] != "••••oken" {
 		t.Fatalf("webdav = %+v", webdav)

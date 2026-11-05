@@ -517,11 +517,11 @@
 					<Input
 						id="dav-dir"
 						bind:value={davRemoteDir}
-						placeholder="weektodo"
+						placeholder="/weektodo"
 						autocomplete="off"
 					/>
 					<p class="text-xs text-muted-foreground">
-						{t('远端目录留空时同步到 WebDAV 根目录。')}
+						{t('相对于 WebDAV 地址，开头的 / 可省略；留空时同步到地址根目录。')}
 					</p>
 				</div>
 
