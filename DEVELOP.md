@@ -134,7 +134,13 @@ npm run build
 - 生成 `SHA256SUMS` 和 `update.json`
 - 上传 GitHub Release
 
-`cmd/update-manifest` 从 `SHA256SUMS`、release notes 和发布时间生成 `update.json`，供应用检查更新。
+Release Notes 由 `scripts/release-notes.sh` 从上一个 tag 到当前 tag 的提交自动生成，按 `新增 / 修复 / 重构 / 其他` 分类，并作为 Release 正文；`cmd/update-manifest` 再从 `SHA256SUMS`、这份正文和发布时间生成 `update.json`，所以应用内显示的更新内容和 Release 页面保持一致。
+
+发布前可以本地预览：
+
+```bash
+./scripts/release-notes.sh v0.2.0
+```
 
 ## WebDAV 同步
 

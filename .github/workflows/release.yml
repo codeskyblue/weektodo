@@ -12,6 +12,9 @@ jobs:
     runs-on: macos-latest
     steps:
       - uses: actions/checkout@v7
+        with:
+          # Release notes need the previous tag and its history.
+          fetch-depth: 0
       - uses: actions/setup-go@v7
         with:
           go-version-file: go.mod
@@ -68,10 +71,12 @@ jobs:
             "dist/WeekTodo-desktop-mac-${VERSION}.dmg"
           rm -rf "${stage}"
           (cd dist && shasum -a 256 weektodo-server-* WeekTodo-desktop-*.dmg > SHA256SUMS)
+      - name: Generate release notes
+        run: ./scripts/release-notes.sh "${GITHUB_REF_NAME}" > "${RUNNER_TEMP}/release-notes.md"
       - uses: softprops/action-gh-release@v3
         with:
           files: dist/*
-          generate_release_notes: true
+          body_path: ${{ runner.temp }}/release-notes.md
           name: ${{ github.ref_name }}
       - name: Upload update manifest
         env:
