@@ -2,78 +2,63 @@ package server
 
 import (
 	"encoding/json"
-	"io"
 	"net/http"
 	"net/http/httptest"
 	"strings"
-	"sync"
 	"testing"
+
+	"github.com/uiautodev/weektodo/internal/webdav/webdavtest"
 )
 
-type testDAV struct {
-	mu    sync.Mutex
-	files map[string][]byte
-	dirs  map[string]bool
-	user  string
-	pass  string
+func newDAV(t *testing.T) *webdavtest.Server {
+	t.Helper()
+	dav := webdavtest.New()
+	t.Cleanup(dav.Close)
+	return dav
 }
 
-func newTestDAV() *testDAV {
-	return &testDAV{
-		files: map[string][]byte{},
-		dirs:  map[string]bool{"/": true},
+func saveDAVSettings(t *testing.T, ts *httptest.Server, davURL, remoteDir, user, pass string) {
+	t.Helper()
+	body := map[string]any{
+		"webdav": map[string]any{
+			"url":       davURL,
+			"remoteDir": remoteDir,
+		},
+	}
+	if user != "" {
+		webdav := body["webdav"].(map[string]any)
+		webdav["username"] = user
+		webdav["password"] = pass
+	}
+	status, raw := request(t, ts, http.MethodPut, "/api/settings", body)
+	if status != http.StatusOK {
+		t.Fatalf("save settings: %d %s", status, raw)
 	}
 }
 
-func (d *testDAV) file(path string) []byte {
-	d.mu.Lock()
-	defer d.mu.Unlock()
-	return d.files[path]
+func saveWeek(t *testing.T, ts *httptest.Server, weekID string, tasks []map[string]any) {
+	t.Helper()
+	status, raw := request(t, ts, http.MethodPut, "/api/weeks/"+weekID, map[string]any{"tasks": tasks})
+	if status != http.StatusOK {
+		t.Fatalf("seed week %s: %d %s", weekID, status, raw)
+	}
 }
 
-func (d *testDAV) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	if d.user != "" {
-		user, pass, ok := r.BasicAuth()
-		if !ok || user != d.user || pass != d.pass {
-			w.WriteHeader(http.StatusUnauthorized)
-			return
-		}
+func remoteWeek(t *testing.T, data []byte) map[string]any {
+	t.Helper()
+	var document modelData
+	if err := json.Unmarshal(data, &document); err != nil {
+		t.Fatalf("decode remote document: %v", err)
 	}
-	switch r.Method {
-	case "PROPFIND":
-		w.WriteHeader(http.StatusMultiStatus)
-	case "MKCOL":
-		d.mu.Lock()
-		defer d.mu.Unlock()
-		if d.dirs[r.URL.Path] {
-			w.WriteHeader(http.StatusMethodNotAllowed)
-			return
-		}
-		d.dirs[r.URL.Path] = true
-		w.WriteHeader(http.StatusCreated)
-	case http.MethodPut:
-		d.mu.Lock()
-		defer d.mu.Unlock()
-		parent := r.URL.Path[:strings.LastIndex(r.URL.Path, "/")]
-		if !d.dirs[parent] {
-			w.WriteHeader(http.StatusConflict)
-			return
-		}
-		body, _ := io.ReadAll(r.Body)
-		d.files[r.URL.Path] = body
-		w.WriteHeader(http.StatusCreated)
-	case http.MethodGet:
-		d.mu.Lock()
-		body, ok := d.files[r.URL.Path]
-		d.mu.Unlock()
-		if !ok {
-			w.WriteHeader(http.StatusNotFound)
-			return
-		}
-		_, _ = w.Write(body)
-	default:
-		w.WriteHeader(http.StatusMethodNotAllowed)
+	if len(document.Weeks) == 0 {
+		return nil
 	}
+	return document.Weeks[0]
+}
+
+// modelData mirrors the parts of model.Data used by these tests.
+type modelData struct {
+	Weeks []map[string]any `json:"weeks"`
 }
 
 func TestWebDAVSettingsAreRedacted(t *testing.T) {
@@ -130,25 +115,13 @@ func TestWebDAVSettingsAreRedacted(t *testing.T) {
 }
 
 func TestWebDAVTestEndpoint(t *testing.T) {
-	dav := newTestDAV()
-	dav.user = "alice"
-	dav.pass = "secret"
-	davServer := httptest.NewServer(dav)
-	defer davServer.Close()
+	dav := newDAV(t)
+	dav.Auth("alice", "secret")
+	dav.Mkdir("/backup")
 
 	ts, _ := newTestServer(t)
-	status, raw := request(t, ts, http.MethodPut, "/api/settings", map[string]any{
-		"webdav": map[string]any{
-			"url":       davServer.URL + "/dav",
-			"username":  "alice",
-			"password":  "secret",
-			"remoteDir": "backup",
-		},
-	})
-	if status != http.StatusOK {
-		t.Fatalf("save settings: %d %s", status, raw)
-	}
-	status, raw = request(t, ts, http.MethodPost, "/api/webdav/test", map[string]any{})
+	saveDAVSettings(t, ts, dav.URL(), "backup", "alice", "secret")
+	status, raw := request(t, ts, http.MethodPost, "/api/webdav/test", map[string]any{})
 	if status != http.StatusOK {
 		t.Fatalf("test webdav: %d %s", status, raw)
 	}
@@ -163,37 +136,20 @@ func TestWebDAVTestEndpoint(t *testing.T) {
 }
 
 func TestWebDAVSyncMergesBothSides(t *testing.T) {
-	dav := newTestDAV()
-	dav.dirs["/dav"] = true
-	remote := `{"version":1,"weeks":[{"id":"2026-W45","start":"2026-11-02","end":"2026-11-08","tasks":[{"id":"remote-1","text":"远端任务","status":"todo","updatedAt":"2026-11-05T11:00:00+08:00","children":[]}]}]}`
-	dav.files["/dav/backup/weektodo.json"] = []byte(remote)
-	davServer := httptest.NewServer(dav)
-	defer davServer.Close()
+	dav := newDAV(t)
+	dav.SetFile("/backup/weektodo.json", []byte(`{"version":1,"weeks":[{"id":"2026-W45","start":"2026-11-02","end":"2026-11-08","tasks":[{"id":"remote-1","text":"远端任务","status":"todo","updatedAt":"2026-11-05T11:00:00+08:00","children":[]}]}]}`))
 
 	ts, _ := newTestServer(t)
-	status, raw := request(t, ts, http.MethodPut, "/api/settings", map[string]any{
-		"webdav": map[string]any{
-			"url":       davServer.URL + "/dav",
-			"remoteDir": "backup",
-		},
-	})
-	if status != http.StatusOK {
-		t.Fatalf("save settings: %d %s", status, raw)
-	}
-	status, raw = request(t, ts, http.MethodPut, "/api/weeks/2026-W45", map[string]any{
-		"tasks": []map[string]any{{
-			"id":        "local-1",
-			"text":      "本地任务",
-			"status":    "todo",
-			"updatedAt": "2026-11-05T10:00:00+08:00",
-			"children":  []any{},
-		}},
-	})
-	if status != http.StatusOK {
-		t.Fatalf("seed week: %d %s", status, raw)
-	}
+	saveDAVSettings(t, ts, dav.URL(), "backup", "", "")
+	saveWeek(t, ts, "2026-W45", []map[string]any{{
+		"id":        "local-1",
+		"text":      "本地任务",
+		"status":    "todo",
+		"updatedAt": "2026-11-05T10:00:00+08:00",
+		"children":  []any{},
+	}})
 
-	status, raw = request(t, ts, http.MethodPost, "/api/webdav/sync", map[string]any{})
+	status, raw := request(t, ts, http.MethodPost, "/api/webdav/sync", map[string]any{})
 	if status != http.StatusOK {
 		t.Fatalf("sync: %d %s", status, raw)
 	}
@@ -201,16 +157,15 @@ func TestWebDAVSyncMergesBothSides(t *testing.T) {
 	if result["weeks"] != float64(1) || result["tasks"] != float64(2) || result["uploaded"] != true {
 		t.Fatalf("sync result = %+v", result)
 	}
+	if result["remotePath"] != "backup/weektodo.json" {
+		t.Fatalf("remotePath = %v", result["remotePath"])
+	}
 
 	status, raw = request(t, ts, http.MethodGet, "/api/weeks/2026-W45", nil)
 	if status != http.StatusOK {
 		t.Fatalf("get week: %d %s", status, raw)
 	}
-	week := decodeMap(t, raw)["week"].(map[string]any)
-	tasks := week["tasks"].([]any)
-	if len(tasks) != 2 {
-		t.Fatalf("local tasks = %+v", tasks)
-	}
+	tasks := decodeMap(t, raw)["week"].(map[string]any)["tasks"].([]any)
 	ids := map[string]bool{}
 	for _, item := range tasks {
 		ids[item.(map[string]any)["id"].(string)] = true
@@ -219,40 +174,130 @@ func TestWebDAVSyncMergesBothSides(t *testing.T) {
 		t.Fatalf("local ids = %+v", ids)
 	}
 
-	var uploaded struct {
-		Weeks []struct {
-			Tasks []struct {
-				ID string `json:"id"`
-			} `json:"tasks"`
-		} `json:"weeks"`
+	remote, ok := dav.File("/backup/weektodo.json")
+	if !ok {
+		t.Fatal("remote file missing")
 	}
-	if err := json.Unmarshal(dav.file("/dav/backup/weektodo.json"), &uploaded); err != nil {
-		t.Fatalf("remote payload: %v", err)
+	week := remoteWeek(t, remote)
+	if week == nil || len(week["tasks"].([]any)) != 2 {
+		t.Fatalf("remote week = %+v", week)
 	}
-	if len(uploaded.Weeks) != 1 || len(uploaded.Weeks[0].Tasks) != 2 {
-		t.Fatalf("remote payload = %+v", uploaded)
+}
+
+func TestWebDAVSyncUploadsWhenRemoteMissing(t *testing.T) {
+	dav := newDAV(t)
+	ts, _ := newTestServer(t)
+	saveDAVSettings(t, ts, dav.URL(), "backup", "", "")
+	saveWeek(t, ts, "2026-W45", []map[string]any{{
+		"id":       "local-1",
+		"text":     "本地任务",
+		"status":   "todo",
+		"children": []any{},
+	}})
+
+	status, raw := request(t, ts, http.MethodPost, "/api/webdav/sync", map[string]any{})
+	if status != http.StatusOK {
+		t.Fatalf("sync: %d %s", status, raw)
+	}
+	if !dav.HasDir("/backup") {
+		t.Fatalf("remote directory was not created: %v", dav.Requests())
+	}
+	remote, ok := dav.File("/backup/weektodo.json")
+	if !ok {
+		t.Fatal("remote file missing")
+	}
+	week := remoteWeek(t, remote)
+	if week == nil || len(week["tasks"].([]any)) != 1 {
+		t.Fatalf("remote week = %+v", week)
+	}
+}
+
+func TestWebDAVSyncPullsRemoteOnlyWeek(t *testing.T) {
+	dav := newDAV(t)
+	dav.SetFile("/backup/weektodo.json", []byte(`{"version":1,"weeks":[{"id":"2026-W44","start":"2026-10-26","end":"2026-11-01","tasks":[{"id":"remote-only","text":"只有远端","status":"todo","children":[]}]}]}`))
+
+	ts, _ := newTestServer(t)
+	saveDAVSettings(t, ts, dav.URL(), "backup", "", "")
+	status, raw := request(t, ts, http.MethodPost, "/api/webdav/sync", map[string]any{})
+	if status != http.StatusOK {
+		t.Fatalf("sync: %d %s", status, raw)
+	}
+	status, raw = request(t, ts, http.MethodGet, "/api/weeks/2026-W44", nil)
+	if status != http.StatusOK {
+		t.Fatalf("remote-only week was not pulled: %d %s", status, raw)
+	}
+	if len(decodeMap(t, raw)["week"].(map[string]any)["tasks"].([]any)) != 1 {
+		t.Fatalf("remote-only week = %s", raw)
+	}
+}
+
+func TestWebDAVSyncUsesNewestTask(t *testing.T) {
+	cases := []struct {
+		name      string
+		localText string
+		localAt   string
+		remote    string
+		want      string
+	}{
+		{
+			name:      "remote newer",
+			localText: "本地旧",
+			localAt:   "2026-11-05T10:00:00+08:00",
+			remote:    "远端新",
+			want:      "远端新",
+		},
+		{
+			name:      "local newer",
+			localText: "本地新",
+			localAt:   "2026-11-05T12:00:00+08:00",
+			remote:    "远端旧",
+			want:      "本地新",
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			dav := newDAV(t)
+			dav.SetFile("/backup/weektodo.json", []byte(`{"version":1,"weeks":[{"id":"2026-W45","start":"2026-11-02","end":"2026-11-08","tasks":[{"id":"same","text":"`+tc.remote+`","status":"todo","createdAt":"2026-11-05T09:00:00+08:00","updatedAt":"2026-11-05T11:00:00+08:00","children":[]}]}]}`))
+
+			ts, _ := newTestServer(t)
+			saveDAVSettings(t, ts, dav.URL(), "backup", "", "")
+			saveWeek(t, ts, "2026-W45", []map[string]any{{
+				"id":        "same",
+				"text":      tc.localText,
+				"status":    "todo",
+				"createdAt": "2026-11-05T09:00:00+08:00",
+				"updatedAt": tc.localAt,
+				"children":  []any{},
+			}})
+
+			status, raw := request(t, ts, http.MethodPost, "/api/webdav/sync", map[string]any{})
+			if status != http.StatusOK {
+				t.Fatalf("sync: %d %s", status, raw)
+			}
+			status, raw = request(t, ts, http.MethodGet, "/api/weeks/2026-W45", nil)
+			if status != http.StatusOK {
+				t.Fatalf("get week: %d %s", status, raw)
+			}
+			tasks := decodeMap(t, raw)["week"].(map[string]any)["tasks"].([]any)
+			if got := tasks[0].(map[string]any)["text"]; got != tc.want {
+				t.Fatalf("task text = %v, want %s", got, tc.want)
+			}
+		})
 	}
 }
 
 func TestWebDAVSyncRejectsBrokenRemote(t *testing.T) {
-	dav := newTestDAV()
-	dav.dirs["/dav"] = true
-	dav.files["/dav/weektodo.json"] = []byte("{not json")
-	davServer := httptest.NewServer(dav)
-	defer davServer.Close()
+	dav := newDAV(t)
+	dav.SetFile("/weektodo.json", []byte("{not json"))
 
 	ts, _ := newTestServer(t)
-	status, raw := request(t, ts, http.MethodPut, "/api/settings", map[string]any{
-		"webdav": map[string]any{"url": davServer.URL + "/dav"},
-	})
-	if status != http.StatusOK {
-		t.Fatalf("save settings: %d %s", status, raw)
-	}
-	status, raw = request(t, ts, http.MethodPost, "/api/webdav/sync", map[string]any{})
+	saveDAVSettings(t, ts, dav.URL(), "", "", "")
+	status, raw := request(t, ts, http.MethodPost, "/api/webdav/sync", map[string]any{})
 	if status != http.StatusUnprocessableEntity {
 		t.Fatalf("sync broken remote = %d %s", status, raw)
 	}
-	if string(dav.file("/dav/weektodo.json")) != "{not json" {
+	stored, ok := dav.File("/weektodo.json")
+	if !ok || string(stored) != "{not json" {
 		t.Fatal("remote file must not be overwritten when parsing fails")
 	}
 }

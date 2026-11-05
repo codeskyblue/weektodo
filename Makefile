@@ -5,7 +5,7 @@ export GOTOOLCHAIN
 BIN := bin/weektodo
 LDFLAGS := -s -w -X main.version=$(VERSION) -X main.commit=$(COMMIT)
 
-.PHONY: all frontend build dev run test check desktop icons clean
+.PHONY: all frontend build dev run test test-webdav check desktop icons clean
 
 all: build
 
@@ -24,6 +24,11 @@ run: build
 
 test: frontend
 	go test ./...
+
+test-webdav:
+	go test ./internal/webdav/... -v
+	go test ./internal/todo -run 'Merge' -v
+	go test ./internal/server -run 'WebDAV' -v
 
 check:
 	cd frontend && npm run check

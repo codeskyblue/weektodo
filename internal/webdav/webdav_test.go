@@ -2,111 +2,31 @@ package webdav
 
 import (
 	"context"
-	"io"
 	"net/http"
-	"net/http/httptest"
 	"strings"
-	"sync"
 	"testing"
 
 	"github.com/uiautodev/weektodo/internal/i18n"
+	"github.com/uiautodev/weektodo/internal/webdav/webdavtest"
 )
 
-type fakeDAV struct {
-	mu            sync.Mutex
-	files         map[string][]byte
-	dirs          map[string]bool
-	user          string
-	password      string
-	propfindCode  int
-	optionsCode   int
-	seenPaths     []string
-	seenAuthUsers []string
-}
-
-func newFakeDAV() *fakeDAV {
-	return &fakeDAV{
-		files: map[string][]byte{},
-		dirs:  map[string]bool{"/": true},
-	}
-}
-
-func (f *fakeDAV) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	f.mu.Lock()
-	f.seenPaths = append(f.seenPaths, r.Method+" "+r.URL.Path)
-	f.seenAuthUsers = append(f.seenAuthUsers, r.Header.Get("Authorization"))
-	f.mu.Unlock()
-
-	if f.user != "" {
-		user, password, ok := r.BasicAuth()
-		if !ok || user != f.user || password != f.password {
-			w.WriteHeader(http.StatusUnauthorized)
-			return
-		}
-	}
-
-	switch r.Method {
-	case "PROPFIND":
-		if f.propfindCode != 0 {
-			w.WriteHeader(f.propfindCode)
-			return
-		}
-		f.mu.Lock()
-		exists := f.dirs[r.URL.Path]
-		f.mu.Unlock()
-		if !exists {
-			w.WriteHeader(http.StatusNotFound)
-			return
-		}
-		w.WriteHeader(http.StatusMultiStatus)
-	case http.MethodOptions:
-		if f.optionsCode != 0 {
-			w.WriteHeader(f.optionsCode)
-			return
-		}
-		w.WriteHeader(http.StatusOK)
-	case "MKCOL":
-		f.mu.Lock()
-		defer f.mu.Unlock()
-		if f.dirs[r.URL.Path] {
-			w.WriteHeader(http.StatusMethodNotAllowed)
-			return
-		}
-		f.dirs[r.URL.Path] = true
-		w.WriteHeader(http.StatusCreated)
-	case http.MethodPut:
-		f.mu.Lock()
-		defer f.mu.Unlock()
-		parent := r.URL.Path[:strings.LastIndex(r.URL.Path, "/")]
-		if !f.dirs[parent] {
-			w.WriteHeader(http.StatusConflict)
-			return
-		}
-		body, _ := io.ReadAll(r.Body)
-		f.files[r.URL.Path] = body
-		w.WriteHeader(http.StatusCreated)
-	case http.MethodGet:
-		f.mu.Lock()
-		data, ok := f.files[r.URL.Path]
-		f.mu.Unlock()
-		if !ok {
-			w.WriteHeader(http.StatusNotFound)
-			return
-		}
-		_, _ = w.Write(data)
-	default:
-		w.WriteHeader(http.StatusMethodNotAllowed)
-	}
-}
-
-func newTestClient(t *testing.T, server *httptest.Server, remoteDir string) *Client {
+func newTestClient(t *testing.T, server *webdavtest.Server, remoteDir string) *Client {
 	t.Helper()
 	return New(Config{
-		URL:       server.URL + "/dav",
+		URL:       server.URL(),
 		Username:  "alice",
 		Password:  "secret",
 		RemoteDir: remoteDir,
 	}, i18n.Zh)
+}
+
+func hasRequest(server *webdavtest.Server, want string) bool {
+	for _, request := range server.Requests() {
+		if request == want {
+			return true
+		}
+	}
+	return false
 }
 
 func TestValidate(t *testing.T) {
@@ -132,47 +52,42 @@ func TestValidate(t *testing.T) {
 }
 
 func TestTestConnection(t *testing.T) {
-	fake := newFakeDAV()
-	fake.dirs["/dav/notes"] = true
-	server := httptest.NewServer(fake)
+	server := webdavtest.New()
 	defer server.Close()
+	server.Auth("alice", "secret")
+	server.Mkdir("/notes")
 
 	client := newTestClient(t, server, "notes")
 	if err := client.Test(context.Background()); err != nil {
 		t.Fatalf("Test: %v", err)
 	}
-	if len(fake.seenAuthUsers) == 0 || fake.seenAuthUsers[0] == "" {
-		t.Fatal("expected basic auth header")
+	if !hasRequest(server, "PROPFIND /notes") {
+		t.Fatalf("requests = %v", server.Requests())
 	}
 }
 
 func TestTestFallsBackToBaseURLWhenDirMissing(t *testing.T) {
-	fake := newFakeDAV()
-	fake.dirs["/dav"] = true
-	server := httptest.NewServer(fake)
+	server := webdavtest.New()
 	defer server.Close()
 
 	client := newTestClient(t, server, "notes/new")
 	if err := client.Test(context.Background()); err != nil {
 		t.Fatalf("Test: %v", err)
 	}
-	joined := strings.Join(fake.seenPaths, "\n")
-	if !strings.Contains(joined, "PROPFIND /dav/notes/new") {
-		t.Fatalf("expected directory probe, got:\n%s", joined)
+	if !hasRequest(server, "PROPFIND /notes/new") {
+		t.Fatalf("expected directory probe, got:\n%v", server.Requests())
 	}
-	if !strings.Contains(joined, "PROPFIND /dav") {
-		t.Fatalf("expected base URL probe, got:\n%s", joined)
+	if !hasRequest(server, "PROPFIND /") {
+		t.Fatalf("expected base URL probe, got:\n%v", server.Requests())
 	}
 }
 
 func TestTestAuthFailure(t *testing.T) {
-	fake := newFakeDAV()
-	fake.user = "alice"
-	fake.password = "secret"
-	server := httptest.NewServer(fake)
+	server := webdavtest.New()
 	defer server.Close()
+	server.Auth("alice", "secret")
 
-	client := New(Config{URL: server.URL + "/dav", Username: "alice", Password: "wrong"}, i18n.En)
+	client := New(Config{URL: server.URL(), Username: "alice", Password: "wrong"}, i18n.En)
 	err := client.Test(context.Background())
 	if err == nil || !strings.Contains(err.Error(), "authentication failed") {
 		t.Fatalf("err = %v", err)
@@ -180,24 +95,21 @@ func TestTestAuthFailure(t *testing.T) {
 }
 
 func TestTestFallsBackToOptions(t *testing.T) {
-	fake := newFakeDAV()
-	fake.propfindCode = http.StatusMethodNotAllowed
-	server := httptest.NewServer(fake)
+	server := webdavtest.New()
 	defer server.Close()
+	server.PropfindStatus(http.StatusMethodNotAllowed)
 
-	client := New(Config{URL: server.URL + "/dav"}, i18n.Zh)
+	client := New(Config{URL: server.URL()}, i18n.Zh)
 	if err := client.Test(context.Background()); err != nil {
 		t.Fatalf("Test: %v", err)
 	}
-	joined := strings.Join(fake.seenPaths, "\n")
-	if !strings.Contains(joined, "OPTIONS /dav") {
-		t.Fatalf("expected OPTIONS fallback, got:\n%s", joined)
+	if !hasRequest(server, "OPTIONS /") {
+		t.Fatalf("expected OPTIONS fallback, got:\n%v", server.Requests())
 	}
 }
 
 func TestGetMissingAndPutCreatesDir(t *testing.T) {
-	fake := newFakeDAV()
-	server := httptest.NewServer(fake)
+	server := webdavtest.New()
 	defer server.Close()
 
 	client := newTestClient(t, server, "notes/2026")
@@ -214,8 +126,12 @@ func TestGetMissingAndPutCreatesDir(t *testing.T) {
 	if string(data) != `{"version":1}` {
 		t.Fatalf("data = %s", data)
 	}
-	if !fake.dirs["/dav/notes"] || !fake.dirs["/dav/notes/2026"] {
-		t.Fatalf("dirs = %+v", fake.dirs)
+	if !server.HasDir("/notes") || !server.HasDir("/notes/2026") {
+		t.Fatalf("directories were not created: %v", server.Requests())
+	}
+	stored, ok := server.File("/notes/2026/weektodo.json")
+	if !ok || string(stored) != `{"version":1}` {
+		t.Fatalf("stored file = %s, %v", stored, ok)
 	}
 }
 

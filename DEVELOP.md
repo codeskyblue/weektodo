@@ -152,6 +152,33 @@ Release Notes 由 `scripts/release-notes.sh` 从上一个 tag 到当前 tag 的�
 - 前端按周维护脏标记，统一防抖保存；切换窗口、跨周移动或 WebDAV 同步前会先等待未完成的保存。
 - 多周视图每列复用 `TaskList` 和紧凑版 `QuickAdd`，`TaskRow` / `DayPicker` 通过任务 ID 定位所属周。
 
+## WebDAV 测试
+
+```bash
+make test-webdav
+```
+
+覆盖内容：
+
+- `internal/webdav`：配置校验、PROPFIND、OPTIONS 回退、Basic Auth、GET/PUT、MKCOL 建目录、路径转义
+- `internal/todo`：本地/远端合并、冲突时间戳、子任务并集
+- `internal/server`：设置脱敏、测试连接、远端为空时上传、仅远端周、较新任务获胜、远端损坏不覆盖
+
+假 WebDAV 服务在 `internal/webdav/webdavtest`，测试里可以直接：
+
+```go
+dav := webdavtest.New()
+defer dav.Close()
+dav.Auth("user", "password")
+dav.Mkdir("/backup")
+dav.SetFile("/backup/weektodo.json", data)
+dav.PropfindStatus(405)  // 模拟不支持 PROPFIND 的服务器
+```
+
+新增同步场景时，用 `newTestServer` 启动 WeekTodo API，`saveDAVSettings` 配置远端，再调用 `/api/webdav/sync` 断言本地和 `dav.File(...)` 两边结果即可。
+
+自动同步的定时触发属于前端行为，目前用浏览器手动回归：开启开关后新增任务，等待约 10 秒确认远端文件更新；关闭后重复操作确认不再上传。
+
 ## WebDAV 同步
 
 - `internal/webdav`：Basic Auth 客户端，负责 `PROPFIND` 测试、`MKCOL` 建目录、`GET` / `PUT` 文件。
