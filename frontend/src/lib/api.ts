@@ -4,6 +4,7 @@ import type {
 	Meta,
 	ReportMode,
 	ReportResponse,
+	AIModelsResponse,
 	SettingsPublic,
 	Task,
 	UpdateInfo,
@@ -136,4 +137,11 @@ export function applyUpdate(): Promise<{
 
 export function updateStatus(): Promise<UpdateProgress> {
 	return request('/update/status');
+}
+
+export function fetchAIModels(draft: { baseUrl: string; apiKey: string }): Promise<AIModelsResponse> {
+	return request('/settings/ai/models', {
+		method: 'POST',
+		body: JSON.stringify(draft)
+	});
 }

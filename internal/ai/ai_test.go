@@ -111,3 +111,62 @@ func TestWeeklyPrompt(t *testing.T) {
 		}
 	}
 }
+
+func TestModels(t *testing.T) {
+	var gotPath, gotAuth string
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		gotPath = r.URL.Path
+		gotAuth = r.Header.Get("Authorization")
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"object": "list",
+			"data": []map[string]any{
+				{"id": "z-model"},
+				{"id": "a-model"},
+				{"id": "a-model"},
+			},
+		})
+	}))
+	defer server.Close()
+	client := New()
+	models, err := client.Models(context.Background(), model.AIConfig{
+		BaseURL: server.URL + "/v1",
+		APIKey:  "test-key",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if gotPath != "/v1/models" || gotAuth != "Bearer test-key" {
+		t.Fatalf("path=%q auth=%q", gotPath, gotAuth)
+	}
+	if len(models) != 2 || models[0] != "a-model" || models[1] != "z-model" {
+		t.Fatalf("models = %+v", models)
+	}
+}
+
+func TestModelsError(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		http.Error(w, "bad key", http.StatusUnauthorized)
+	}))
+	defer server.Close()
+	client := New()
+	if _, err := client.Models(context.Background(), model.AIConfig{
+		BaseURL: server.URL + "/v1",
+		APIKey:  "bad",
+	}); err == nil || !strings.Contains(err.Error(), "401") {
+		t.Fatalf("err = %v", err)
+	}
+}
+
+func TestModelsEndpoint(t *testing.T) {
+	cases := map[string]string{
+		"https://api.example.com/v1":                  "https://api.example.com/v1/models",
+		"https://api.example.com/v1/":                 "https://api.example.com/v1/models",
+		"https://api.example.com/v1/chat/completions": "https://api.example.com/v1/models",
+		"https://api.example.com/v1/models":           "https://api.example.com/v1/models",
+	}
+	for input, want := range cases {
+		if got := modelsEndpoint(input); got != want {
+			t.Errorf("modelsEndpoint(%q) = %q, want %q", input, got, want)
+		}
+	}
+}

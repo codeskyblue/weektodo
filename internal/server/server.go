@@ -60,6 +60,7 @@ func (s *Server) routes() {
 	s.mux.HandleFunc("GET /api/settings", s.handleGetSettings)
 	s.mux.HandleFunc("PUT /api/settings", s.handleSaveSettings)
 	s.mux.HandleFunc("POST /api/settings/ai/test", s.handleTestAI)
+	s.mux.HandleFunc("POST /api/settings/ai/models", s.handleAIModels)
 	s.mux.HandleFunc("GET /api/update/check", s.handleUpdateCheck)
 	s.mux.HandleFunc("POST /api/update/apply", s.handleUpdateApply)
 	s.mux.HandleFunc("GET /api/update/status", s.handleUpdateStatus)

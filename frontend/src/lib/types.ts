@@ -122,6 +122,11 @@ export interface UpdateInfo {
 	desktop: boolean;
 }
 
+export interface AIModelsResponse {
+	models: string[];
+	count: number;
+}
+
 export interface UpdateProgress {
 	active: boolean;
 	stage: string;

@@ -48,7 +48,16 @@ func installDesktopAsset(dmg, exe string) error {
 	if out, err := exec.Command("codesign", "--force", "--deep", "--sign", "-", bundle).CombinedOutput(); err != nil {
 		log.Printf("re-sign updated app: %v: %s", err, string(out))
 	}
+	refreshLaunchServices(bundle)
 	return nil
+}
+
+func refreshLaunchServices(bundle string) {
+	lsregister := "/System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister"
+	if _, err := os.Stat(lsregister); err != nil {
+		return
+	}
+	_ = exec.Command(lsregister, "-f", bundle).Run()
 }
 
 func appBundle(exe string) string {

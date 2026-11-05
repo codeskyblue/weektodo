@@ -35,4 +35,8 @@ cp "${ROOT}/desktop/build/darwin/AppIcon.icns" "${APP}/Contents/Resources/AppIco
 	-c "Set :CFBundleShortVersionString ${VERSION}" \
 	"${APP}/Contents/Info.plist"
 codesign --force --deep --sign - "${APP}"
+LSREGISTER="/System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister"
+if [[ -x "${LSREGISTER}" ]]; then
+	"${LSREGISTER}" -f "${APP}" >/dev/null 2>&1 || true
+fi
 echo "Built ${APP}"

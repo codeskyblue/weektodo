@@ -4,6 +4,7 @@
 	import Copy from '@lucide/svelte/icons/copy';
 	import Download from '@lucide/svelte/icons/download';
 	import ExternalLink from '@lucide/svelte/icons/external-link';
+	import List from '@lucide/svelte/icons/list';
 	import Loader2 from '@lucide/svelte/icons/loader-2';
 	import Monitor from '@lucide/svelte/icons/monitor';
 	import Moon from '@lucide/svelte/icons/moon';
@@ -32,6 +33,15 @@
 
 	const configured = $derived(app.settings?.ai.configured ?? false);
 	const hint = $derived(app.settings?.ai.apiKeyHint ?? '');
+
+	let loadingModels = $state(false);
+	let modelOptions = $state<string[]>([]);
+	let modelError = $state('');
+	let modelFilter = $state('');
+
+	const filteredModels = $derived(
+		modelOptions.filter((option) => option.toLowerCase().includes(modelFilter.trim().toLowerCase()))
+	);
 
 	let checkingUpdate = $state(false);
 	let installingUpdate = $state(false);
@@ -153,6 +163,40 @@
 		testing = false;
 	}
 
+	async function fetchModels(): Promise<void> {
+		if (loadingModels) return;
+		modelError = '';
+		if (!baseUrl.trim()) {
+			modelError = '请先填写 Base URL';
+			return;
+		}
+		if (!apiKey.trim() && !configured) {
+			modelError = '请先填写 API Key';
+			return;
+		}
+		loadingModels = true;
+		try {
+			const result = await api.fetchAIModels({ baseUrl, apiKey });
+			modelOptions = result.models;
+			modelFilter = '';
+			if (result.models.length === 0) {
+				modelError = '接口没有返回模型列表';
+			}
+		} catch (error) {
+			modelOptions = [];
+			modelError = error instanceof Error ? error.message : String(error);
+		} finally {
+			loadingModels = false;
+		}
+	}
+
+	function selectModel(option: string): void {
+		model = option;
+		modelOptions = [];
+		modelFilter = '';
+		modelError = '';
+	}
+
 	async function copyPath(): Promise<void> {
 		if (!app.meta) return;
 		try {
@@ -198,7 +242,58 @@
 				</div>
 				<div class="space-y-1.5">
 					<Label for="ai-model">模型</Label>
-					<Input id="ai-model" bind:value={model} placeholder="deepseek-chat" autocomplete="off" />
+					<div class="flex gap-2">
+						<Input
+							id="ai-model"
+							bind:value={model}
+							placeholder="deepseek-chat"
+							autocomplete="off"
+							class="min-w-0 flex-1"
+						/>
+						<Button
+							variant="outline"
+							size="sm"
+							class="shrink-0"
+							onclick={fetchModels}
+							disabled={loadingModels}
+						>
+							{#if loadingModels}
+								<Loader2 class="animate-spin" /> 获取中…
+							{:else}
+								<List /> 获取列表
+							{/if}
+						</Button>
+					</div>
+					{#if modelError}
+						<p class="text-xs text-destructive">{modelError}</p>
+					{/if}
+					{#if modelOptions.length > 0}
+						<div class="overflow-hidden rounded-lg border">
+							<div class="border-b p-1.5">
+								<Input
+									bind:value={modelFilter}
+									placeholder={`筛选 ${modelOptions.length} 个模型…`}
+									class="h-7 text-xs"
+								/>
+							</div>
+							<div class="max-h-44 overflow-y-auto p-1">
+								{#each filteredModels as option (option)}
+									<button
+										type="button"
+										class="flex w-full items-center justify-between gap-2 rounded-md px-2 py-1.5 text-left text-xs transition-colors hover:bg-muted"
+										onclick={() => selectModel(option)}
+									>
+										<span class="truncate">{option}</span>
+										{#if model === option}
+											<Check class="size-3.5 shrink-0 text-emerald-600 dark:text-emerald-400" />
+										{/if}
+									</button>
+								{:else}
+									<p class="px-2 py-3 text-xs text-muted-foreground">没有匹配的模型</p>
+								{/each}
+							</div>
+						</div>
+					{/if}
 				</div>
 				<div class="space-y-1.5">
 					<Label for="ai-key">API Key</Label>

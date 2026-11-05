@@ -8,6 +8,7 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"sort"
 	"strings"
 	"time"
 	"unicode/utf8"
@@ -26,8 +27,8 @@ func New() *Client {
 	return &Client{http: &http.Client{Timeout: 90 * time.Second}}
 }
 
-// ValidateConfig checks the user supplied endpoint configuration.
-func ValidateConfig(cfg model.AIConfig) error {
+// ValidateEndpoint checks the URL and credentials needed to reach the API.
+func ValidateEndpoint(cfg model.AIConfig) error {
 	if strings.TrimSpace(cfg.BaseURL) == "" {
 		return fmt.Errorf("请先填写 AI Base URL")
 	}
@@ -35,13 +36,112 @@ func ValidateConfig(cfg model.AIConfig) error {
 	if err != nil || (parsed.Scheme != "http" && parsed.Scheme != "https") || parsed.Host == "" {
 		return fmt.Errorf("AI Base URL 必须是 http:// 或 https:// 地址")
 	}
-	if strings.TrimSpace(cfg.Model) == "" {
-		return fmt.Errorf("请先填写模型名称")
-	}
 	if strings.TrimSpace(cfg.APIKey) == "" {
 		return fmt.Errorf("请先填写 API Key")
 	}
 	return nil
+}
+
+// ValidateConfig checks the complete chat endpoint configuration.
+func ValidateConfig(cfg model.AIConfig) error {
+	if err := ValidateEndpoint(cfg); err != nil {
+		return err
+	}
+	if strings.TrimSpace(cfg.Model) == "" {
+		return fmt.Errorf("请先填写模型名称")
+	}
+	return nil
+}
+
+// Models fetches the OpenAI-compatible model list from the configured endpoint.
+func (c *Client) Models(ctx context.Context, cfg model.AIConfig) ([]string, error) {
+	if err := ValidateEndpoint(cfg); err != nil {
+		return nil, err
+	}
+	endpoint := modelsEndpoint(cfg.BaseURL)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint, nil)
+	if err != nil {
+		return nil, fmt.Errorf("构建模型列表请求失败: %w", err)
+	}
+	req.Header.Set("Accept", "application/json")
+	req.Header.Set("Authorization", "Bearer "+strings.TrimSpace(cfg.APIKey))
+	resp, err := c.http.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("获取模型列表失败: %w", err)
+	}
+	defer resp.Body.Close()
+	raw, _ := io.ReadAll(io.LimitReader(resp.Body, 4<<20))
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		message := strings.TrimSpace(string(raw))
+		if len(message) > 300 {
+			message = message[:300] + "…"
+		}
+		if message == "" {
+			message = resp.Status
+		}
+		return nil, fmt.Errorf("模型列表接口返回 %d: %s", resp.StatusCode, message)
+	}
+	ids := parseModelIDs(raw)
+	if len(ids) == 0 {
+		return nil, fmt.Errorf("接口没有返回模型列表")
+	}
+	return ids, nil
+}
+
+func modelsEndpoint(base string) string {
+	endpoint := strings.TrimRight(strings.TrimSpace(base), "/")
+	endpoint = strings.TrimSuffix(endpoint, "/chat/completions")
+	if strings.HasSuffix(endpoint, "/models") {
+		return endpoint
+	}
+	return endpoint + "/models"
+}
+
+func parseModelIDs(raw []byte) []string {
+	var payload struct {
+		Data   json.RawMessage `json:"data"`
+		Models json.RawMessage `json:"models"`
+	}
+	_ = json.Unmarshal(raw, &payload)
+	seen := map[string]bool{}
+	out := []string{}
+	add := func(id string) {
+		id = strings.TrimSpace(id)
+		if id == "" || seen[id] {
+			return
+		}
+		seen[id] = true
+		out = append(out, id)
+	}
+	collect := func(data json.RawMessage) {
+		if len(data) == 0 {
+			return
+		}
+		var objects []struct {
+			ID   string `json:"id"`
+			Name string `json:"name"`
+		}
+		if json.Unmarshal(data, &objects) == nil {
+			for _, item := range objects {
+				if item.ID != "" {
+					add(item.ID)
+				} else {
+					add(item.Name)
+				}
+			}
+			return
+		}
+		var stringsList []string
+		if json.Unmarshal(data, &stringsList) == nil {
+			for _, item := range stringsList {
+				add(item)
+			}
+		}
+	}
+	collect(payload.Data)
+	collect(payload.Models)
+	sort.Strings(out)
+	return out
 }
 
 // Polish generates a weekly report from the local report and completed task tree.

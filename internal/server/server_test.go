@@ -306,3 +306,43 @@ func TestUpdateEndpoints(t *testing.T) {
 		t.Fatalf("apply up-to-date status = %d", status)
 	}
 }
+
+func TestAIModelsEndpoint(t *testing.T) {
+	modelsSrv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/v1/models" {
+			http.NotFound(w, r)
+			return
+		}
+		if r.Header.Get("Authorization") != "Bearer test-key" {
+			http.Error(w, "bad key", http.StatusUnauthorized)
+			return
+		}
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"data": []map[string]any{{"id": "model-b"}, {"id": "model-a"}},
+		})
+	}))
+	defer modelsSrv.Close()
+
+	ts, st := newTestServer(t)
+	if status, _ := request(t, ts, http.MethodPost, "/api/settings/ai/models", map[string]any{}); status != http.StatusBadRequest {
+		t.Fatalf("unconfigured status = %d", status)
+	}
+	if err := st.UpdateSettings(model.Settings{AI: model.AIConfig{
+		BaseURL: modelsSrv.URL + "/v1",
+		APIKey:  "test-key",
+		Model:   "model-a",
+	}}); err != nil {
+		t.Fatal(err)
+	}
+	status, raw := request(t, ts, http.MethodPost, "/api/settings/ai/models", map[string]any{
+		"baseUrl": modelsSrv.URL + "/v1",
+	})
+	if status != http.StatusOK {
+		t.Fatalf("status = %d %s", status, raw)
+	}
+	models := decodeMap(t, raw)["models"].([]any)
+	if len(models) != 2 || models[0] != "model-a" || models[1] != "model-b" {
+		t.Fatalf("models = %+v", models)
+	}
+
+}

@@ -68,6 +68,7 @@ WEEKTODO_DATA_DIR=/tmp/weektodo-dev make dev
 | POST | `/api/weeks/{id}/report/polish` | AI 润色 |
 | GET/PUT | `/api/settings` | AI 设置（Key 只写不读） |
 | POST | `/api/settings/ai/test` | 测试 AI 连接 |
+| POST | `/api/settings/ai/models` | 获取 OpenAI 兼容模型列表 |
 | GET | `/api/update/check` | 检查最新版本 |
 | POST | `/api/update/apply` | 下载并安装更新 |
 | GET | `/api/update/status` | 下载/安装进度 |
@@ -144,8 +145,8 @@ make desktop
 ```
 
 构建脚本分别编译 `amd64` 和 `arm64`，用 `lipo` 合并，复制 `Info.plist` 和
-`AppIcon.icns`，最后 ad-hoc 签名。`Info.plist` 包含 `LSUIElement=true`，应用
-只出现在菜单栏，不显示 Dock 图标。
+`AppIcon.icns`，最后 ad-hoc 签名。应用使用常规激活策略，因此会同时出现在
+Dock、Cmd+Tab 和菜单栏；关闭窗口后仍常驻菜单栏。
 
 托盘图标和菜单栏数字由 `desktop/main.go` 维护：
 

@@ -47,7 +47,7 @@ func main() {
 			Handler: srv.Handler(),
 		},
 		Mac: application.MacOptions{
-			ActivationPolicy: application.ActivationPolicyAccessory,
+			ActivationPolicy: application.ActivationPolicyRegular,
 			ApplicationShouldTerminateAfterLastWindowClosed: false,
 		},
 	})
@@ -202,6 +202,11 @@ func main() {
 	if runtime.GOOS == "darwin" {
 		app.Event.OnApplicationEvent(events.Mac.ApplicationShouldHandleReopen, func(*application.ApplicationEvent) {
 			showWindow()
+		})
+		app.Event.OnApplicationEvent(events.Mac.ApplicationDidBecomeActive, func(*application.ApplicationEvent) {
+			if !window.IsVisible() {
+				showWindow()
+			}
 		})
 	}
 

@@ -46,6 +46,36 @@ func (s *Server) handleSaveSettings(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{"ai": publicAI(s.store.Settings().AI)})
 }
 
+func (s *Server) handleAIModels(w http.ResponseWriter, r *http.Request) {
+	var body struct {
+		BaseURL *string `json:"baseUrl"`
+		APIKey  *string `json:"apiKey"`
+	}
+	_ = decodeJSON(w, r, &body)
+	cfg := s.store.Settings().AI
+	if body.BaseURL != nil && strings.TrimSpace(*body.BaseURL) != "" {
+		cfg.BaseURL = *body.BaseURL
+	}
+	if body.APIKey != nil && strings.TrimSpace(*body.APIKey) != "" {
+		cfg.APIKey = *body.APIKey
+	}
+	if err := ai.ValidateEndpoint(cfg); err != nil {
+		writeError(w, http.StatusBadRequest, "ai_not_configured", err.Error())
+		return
+	}
+	ctx, cancel := context.WithTimeout(r.Context(), 30*time.Second)
+	defer cancel()
+	models, err := s.ai.Models(ctx, cfg)
+	if err != nil {
+		writeError(w, http.StatusBadGateway, "ai_failed", err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{
+		"models": models,
+		"count":  len(models),
+	})
+}
+
 func (s *Server) handleTestAI(w http.ResponseWriter, r *http.Request) {
 	var body struct {
 		BaseURL *string `json:"baseUrl"`
