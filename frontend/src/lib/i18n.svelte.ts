@@ -183,8 +183,9 @@ const en: Record<string, string> = {
 
 	// WebDAV
 	'WebDAV 同步': 'WebDAV sync',
-	'将 data.json 同步到远端目录，本地和远端会双向合并。':
-		'Sync data.json to a remote folder; local and remote changes are merged both ways.',
+	'设置导航': 'Settings sections',
+	'将 weektodo.json 同步到远端目录，本地和远端会双向合并。':
+		'Sync weektodo.json to a remote folder; local and remote changes are merged both ways.',
 	'WebDAV 地址': 'WebDAV URL',
 	'用户名': 'Username',
 	'密码': 'Password',

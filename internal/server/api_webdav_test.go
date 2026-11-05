@@ -164,7 +164,7 @@ func TestWebDAVSyncMergesBothSides(t *testing.T) {
 	dav := newTestDAV()
 	dav.dirs["/dav"] = true
 	remote := `{"version":1,"weeks":[{"id":"2026-W45","start":"2026-11-02","end":"2026-11-08","tasks":[{"id":"remote-1","text":"远端任务","status":"todo","updatedAt":"2026-11-05T11:00:00+08:00","children":[]}]}]}`
-	dav.files["/dav/backup/data.json"] = []byte(remote)
+	dav.files["/dav/backup/weektodo.json"] = []byte(remote)
 	davServer := httptest.NewServer(dav)
 	defer davServer.Close()
 
@@ -224,7 +224,7 @@ func TestWebDAVSyncMergesBothSides(t *testing.T) {
 			} `json:"tasks"`
 		} `json:"weeks"`
 	}
-	if err := json.Unmarshal(dav.file("/dav/backup/data.json"), &uploaded); err != nil {
+	if err := json.Unmarshal(dav.file("/dav/backup/weektodo.json"), &uploaded); err != nil {
 		t.Fatalf("remote payload: %v", err)
 	}
 	if len(uploaded.Weeks) != 1 || len(uploaded.Weeks[0].Tasks) != 2 {
@@ -235,7 +235,7 @@ func TestWebDAVSyncMergesBothSides(t *testing.T) {
 func TestWebDAVSyncRejectsBrokenRemote(t *testing.T) {
 	dav := newTestDAV()
 	dav.dirs["/dav"] = true
-	dav.files["/dav/data.json"] = []byte("{not json")
+	dav.files["/dav/weektodo.json"] = []byte("{not json")
 	davServer := httptest.NewServer(dav)
 	defer davServer.Close()
 
@@ -250,7 +250,7 @@ func TestWebDAVSyncRejectsBrokenRemote(t *testing.T) {
 	if status != http.StatusUnprocessableEntity {
 		t.Fatalf("sync broken remote = %d %s", status, raw)
 	}
-	if string(dav.file("/dav/data.json")) != "{not json" {
+	if string(dav.file("/dav/weektodo.json")) != "{not json" {
 		t.Fatal("remote file must not be overwritten when parsing fails")
 	}
 }

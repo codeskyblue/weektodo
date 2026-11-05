@@ -23,7 +23,6 @@
 	import { Input } from '#lib/components/ui/input/index.js';
 	import { Label } from '#lib/components/ui/label/index.js';
 	import { Progress } from '#lib/components/ui/progress/index.js';
-	import { Separator } from '#lib/components/ui/separator/index.js';
 
 	let baseUrl = $state(app.settings?.ai.baseUrl ?? '');
 	let model = $state(app.settings?.ai.model ?? '');
@@ -51,6 +50,17 @@
 
 	const davHasPassword = $derived(app.settings?.webdav.hasPassword ?? false);
 	const davHint = $derived(app.settings?.webdav.passwordHint ?? '');
+
+	const sections = [
+		{ id: 'ai', label: 'AI 周报润色' },
+		{ id: 'webdav', label: 'WebDAV 同步' },
+		{ id: 'appearance', label: '外观' },
+		{ id: 'language', label: '语言' },
+		{ id: 'update', label: '应用更新' },
+		{ id: 'data', label: '数据' }
+	] as const;
+	type Section = (typeof sections)[number]['id'];
+	let section = $state<Section>('ai');
 
 	$effect(() => {
 		if (davPasswordInput) davPasswordInput.type = 'pass' + 'word';
@@ -310,13 +320,33 @@
 </script>
 
 <Dialog.Root bind:open={app.settingsOpen}>
-	<Dialog.Content class="max-h-[88vh] overflow-y-auto sm:max-w-lg">
+	<Dialog.Content class="max-h-[88vh] sm:max-w-3xl">
 		<Dialog.Header>
 			<Dialog.Title>{t('设置')}</Dialog.Title>
 			<Dialog.Description>{t('配置 AI 周报润色、WebDAV 同步和界面外观。')}</Dialog.Description>
 		</Dialog.Header>
 
-		<div class="space-y-6 py-1">
+		<div class="grid gap-4 py-1 md:grid-cols-[10.5rem_1fr] md:gap-6">
+			<nav
+				class="flex gap-1 overflow-x-auto md:flex-col md:overflow-visible"
+				aria-label={t('设置导航')}
+			>
+				{#each sections as item (item.id)}
+					<button
+						type="button"
+						class="shrink-0 rounded-md px-3 py-2 text-left text-sm text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+						class:bg-muted={section === item.id}
+						class:font-medium={section === item.id}
+						class:text-foreground={section === item.id}
+						onclick={() => (section = item.id)}
+					>
+						{t(item.label)}
+					</button>
+				{/each}
+			</nav>
+
+			<div class="max-h-[62vh] min-h-[22rem] space-y-3 overflow-y-auto pr-1">
+			{#if section === 'ai'}
 			<section class="space-y-3">
 				<div class="flex items-center justify-between">
 					<div>
@@ -439,13 +469,14 @@
 				</div>
 			</section>
 
-			<Separator />
+			{/if}
 
+			{#if section === 'webdav'}
 			<section class="space-y-3">
 				<div>
 					<h3 class="text-sm font-medium">{t('WebDAV 同步')}</h3>
 					<p class="mt-0.5 text-xs text-muted-foreground">
-						{t('将 data.json 同步到远端目录，本地和远端会双向合并。')}
+						{t('将 weektodo.json 同步到远端目录，本地和远端会双向合并。')}
 					</p>
 				</div>
 
@@ -534,8 +565,9 @@
 				</p>
 			</section>
 
-			<Separator />
+			{/if}
 
+			{#if section === 'appearance'}
 			<section class="space-y-2">
 				<h3 class="text-sm font-medium">{t('外观')}</h3>
 				<div class="flex gap-1.5">
@@ -563,8 +595,9 @@
 				</div>
 			</section>
 
-			<Separator />
+			{/if}
 
+			{#if section === 'language'}
 			<section class="space-y-2">
 				<h3 class="text-sm font-medium">{t('语言')}</h3>
 				<div class="flex gap-1.5">
@@ -585,8 +618,9 @@
 				</div>
 			</section>
 
-			<Separator />
+			{/if}
 
+			{#if section === 'update'}
 			<section class="space-y-2">
 				<div class="flex items-start justify-between gap-3">
 					<div>
@@ -666,8 +700,9 @@
 				{/if}
 			</section>
 
-			<Separator />
+			{/if}
 
+			{#if section === 'data'}
 			<section class="space-y-2">
 				<h3 class="text-sm font-medium">{t('数据')}</h3>
 				<div class="flex items-center gap-2">
@@ -686,6 +721,8 @@
 					· {t('数据以 JSON 保存，每天首次保存时会自动备份，保留 14 天。')}
 				</p>
 			</section>
+			{/if}
+			</div>
 		</div>
 
 		<Dialog.Footer>

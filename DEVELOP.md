@@ -141,7 +141,7 @@ npm run build
 - `internal/webdav`：Basic Auth 客户端，负责 `PROPFIND` 测试、`MKCOL` 建目录、`GET` / `PUT` 文件。
 - `internal/todo/merge.go`：按任务 ID 和更新时间合并两份 JSON，子任务取并集。
 - `POST /api/webdav/test`：用草稿配置（空密码沿用已保存密码）测试连接。
-- `POST /api/webdav/sync`：`Snapshot` 本地数据 → 下载远端 `data.json` → `MergeData` → `ReplaceData` → 上传合并结果；远端 JSON 解析失败时不修改任何数据。
+- `POST /api/webdav/sync`：`Snapshot` 本地数据 → 下载远端 `weektodo.json` → `MergeData` → `ReplaceData` → 上传合并结果；远端 JSON 解析失败时不修改任何数据。
 - 配置保存在 `settings.json` 的 `webdav` 字段，密码不会通过 `GET /api/settings` 返回，只返回末四位提示。
 - 同步失败会保留本地数据；上传失败时本地已写入合并结果，可以再次同步重试。
 

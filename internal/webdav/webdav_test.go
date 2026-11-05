@@ -201,13 +201,13 @@ func TestGetMissingAndPutCreatesDir(t *testing.T) {
 	defer server.Close()
 
 	client := newTestClient(t, server, "notes/2026")
-	if _, exists, err := client.Get(context.Background(), "data.json"); err != nil || exists {
+	if _, exists, err := client.Get(context.Background(), "weektodo.json"); err != nil || exists {
 		t.Fatalf("Get missing = %v, %v", exists, err)
 	}
-	if err := client.Put(context.Background(), "data.json", []byte(`{"version":1}`)); err != nil {
+	if err := client.Put(context.Background(), "weektodo.json", []byte(`{"version":1}`)); err != nil {
 		t.Fatalf("Put: %v", err)
 	}
-	data, exists, err := client.Get(context.Background(), "data.json")
+	data, exists, err := client.Get(context.Background(), "weektodo.json")
 	if err != nil || !exists {
 		t.Fatalf("Get after put = %v, %v", exists, err)
 	}
@@ -221,14 +221,14 @@ func TestGetMissingAndPutCreatesDir(t *testing.T) {
 
 func TestEndpointEscapesSegmentsOnce(t *testing.T) {
 	client := New(Config{URL: "https://dav.example.com/dav root", RemoteDir: "周报/子目录"}, i18n.Zh)
-	endpoint, err := client.endpoint("data.json")
+	endpoint, err := client.endpoint("weektodo.json")
 	if err != nil {
 		t.Fatal(err)
 	}
 	if strings.Contains(endpoint, "%25") {
 		t.Fatalf("double escaped endpoint: %s", endpoint)
 	}
-	for _, want := range []string{"dav%20root", "%E5%91%A8%E6%8A%A5", "%E5%AD%90%E7%9B%AE%E5%BD%95", "data.json"} {
+	for _, want := range []string{"dav%20root", "%E5%91%A8%E6%8A%A5", "%E5%AD%90%E7%9B%AE%E5%BD%95", "weektodo.json"} {
 		if !strings.Contains(endpoint, want) {
 			t.Fatalf("endpoint %s missing %s", endpoint, want)
 		}

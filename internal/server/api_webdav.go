@@ -13,7 +13,7 @@ import (
 	"github.com/uiautodev/weektodo/internal/webdav"
 )
 
-const webdavFileName = "data.json"
+const webdavFileName = "weektodo.json"
 
 // webdavDraft is the optional request body used by test and sync.
 type webdavDraft struct {
@@ -90,7 +90,7 @@ func (s *Server) handleSyncWebDAV(w http.ResponseWriter, r *http.Request) {
 	if exists {
 		if err := json.Unmarshal(raw, &remote); err != nil {
 			writeError(w, http.StatusUnprocessableEntity, "webdav_invalid_remote",
-				i18n.T(lang, "远端 data.json 解析失败，未做任何修改", "Remote data.json is invalid; nothing was changed")+": "+err.Error())
+				i18n.T(lang, "远端 weektodo.json 解析失败，未做任何修改", "Remote weektodo.json is invalid; nothing was changed")+": "+err.Error())
 			return
 		}
 	}
