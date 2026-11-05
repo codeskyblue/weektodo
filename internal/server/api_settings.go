@@ -17,6 +17,7 @@ func (s *Server) handleGetSettings(w http.ResponseWriter, _ *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{
 		"ai":       publicAI(settings.AI),
 		"webdav":   publicWebDAV(settings.WebDAV),
+		"weekSpan": settings.WeekSpan,
 		"language": settings.Language,
 	})
 }
@@ -36,6 +37,7 @@ func (s *Server) handleSaveSettings(w http.ResponseWriter, r *http.Request) {
 			RemoteDir     *string `json:"remoteDir"`
 			ClearPassword bool    `json:"clearPassword"`
 		} `json:"webdav"`
+		WeekSpan *int    `json:"weekSpan"`
 		Language *string `json:"language"`
 	}
 	if err := decodeJSON(w, r, &body); err != nil {
@@ -74,6 +76,17 @@ func (s *Server) handleSaveSettings(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
+	if body.WeekSpan != nil {
+		switch *body.WeekSpan {
+		case 1, 2, 3:
+			current.WeekSpan = *body.WeekSpan
+		default:
+			writeError(w, http.StatusBadRequest, "invalid_week_span", i18n.T(responseLanguage(w),
+				"显示周数只能是 1、2 或 3 周",
+				"Weeks shown must be 1, 2 or 3"))
+			return
+		}
+	}
 	if body.Language != nil {
 		if lang := i18n.Normalize(*body.Language); lang != "" {
 			current.Language = string(lang)
@@ -87,6 +100,7 @@ func (s *Server) handleSaveSettings(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{
 		"ai":       publicAI(settings.AI),
 		"webdav":   publicWebDAV(settings.WebDAV),
+		"weekSpan": settings.WeekSpan,
 		"language": settings.Language,
 	})
 }

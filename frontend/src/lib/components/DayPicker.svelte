@@ -11,7 +11,8 @@
 	let { task }: { task: Task } = $props();
 	let open = $state(false);
 
-	const days = $derived(app.week ? daysOfWeek(app.week.start) : []);
+	const week = $derived(app.weekOfTask(task.id) ?? app.week);
+	const days = $derived(week ? daysOfWeek(week.start) : []);
 	const label = $derived(task.day ? (task.day === app.today ? t('今天') : weekdayLabel(task.day)) : '');
 </script>
 

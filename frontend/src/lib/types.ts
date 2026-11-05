@@ -61,6 +61,7 @@ export interface WebDAVPublic {
 export interface SettingsPublic {
 	ai: AIPublic;
 	webdav: WebDAVPublic;
+	weekSpan?: number;
 	language?: 'zh' | 'en';
 }
 

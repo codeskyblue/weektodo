@@ -10,6 +10,7 @@
 	import ReportSheet from '#lib/components/ReportSheet.svelte';
 	import SettingsDialog from '#lib/components/SettingsDialog.svelte';
 	import TaskList from '#lib/components/TaskList.svelte';
+	import WeekColumn from '#lib/components/WeekColumn.svelte';
 	import { Button } from '#lib/components/ui/button/index.js';
 	import { Card, CardContent } from '#lib/components/ui/card/index.js';
 	import { Skeleton } from '#lib/components/ui/skeleton/index.js';
@@ -50,18 +51,34 @@
 			</Card>
 		</main>
 	{:else if app.week}
-		<main class="mx-auto flex w-full max-w-4xl flex-1 flex-col px-4 sm:px-6">
+		<main
+			class="mx-auto flex w-full flex-1 flex-col px-4 sm:px-6"
+			class:max-w-4xl={app.weekSpan === 1}
+			class:max-w-7xl={app.weekSpan > 1}
+		>
 			<div class="pt-4">
 				<FilterBar />
 			</div>
-			<div class="flex-1 py-4">
-				{#if rows.length === 0}
-					<EmptyState filtered={app.week.tasks.length > 0} />
-				{:else}
-					<TaskList {rows} />
-				{/if}
-			</div>
-			<QuickAdd />
+			{#if app.weekSpan === 1}
+				<div class="flex-1 py-4">
+					{#if rows.length === 0}
+						<EmptyState filtered={app.week.tasks.length > 0} />
+					{:else}
+						<TaskList {rows} />
+					{/if}
+				</div>
+				<QuickAdd />
+			{:else}
+				<div
+					class="grid flex-1 items-start gap-4 py-4 {app.weekSpan === 3
+						? 'lg:grid-cols-3'
+						: 'lg:grid-cols-2'}"
+				>
+					{#each app.weeks as week (week.id)}
+						<WeekColumn {week} />
+					{/each}
+				</div>
+			{/if}
 		</main>
 	{/if}
 </div>

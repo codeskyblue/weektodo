@@ -9,30 +9,30 @@
 	import { Input } from '#lib/components/ui/input/index.js';
 	import * as Popover from '#lib/components/ui/popover/index.js';
 
+	let { weekId = '', compact = false }: { weekId?: string; compact?: boolean } = $props();
+
 	let draft = $state('');
 	let inputEl = $state<HTMLInputElement | null>(null);
 	let dayOpen = $state(false);
 	let dayOverride = $state<{ weekId: string; day: string | null } | null>(null);
 
-	const days = $derived(app.week ? daysOfWeek(app.week.start) : []);
+	const week = $derived(app.weekById(weekId || app.anchorId) ?? app.week);
+	const isCurrent = $derived(week ? app.isCurrent(week) : false);
+	const days = $derived(week ? daysOfWeek(week.start) : []);
 	const selectedDay = $derived(
-		app.week && dayOverride?.weekId === app.week.id
-			? dayOverride.day
-			: app.isCurrentWeek
-				? app.today
-				: null
+		week && dayOverride?.weekId === week.id ? dayOverride.day : isCurrent ? app.today : null
 	);
 	const dayLabel = $derived(
 		selectedDay ? (selectedDay === app.today ? t('今天') : weekdayLabel(selectedDay)) : t('未安排')
 	);
 
 	function chooseDay(day: string | null): void {
-		if (!app.week) return;
-		dayOverride = { weekId: app.week.id, day };
+		if (!week) return;
+		dayOverride = { weekId: week.id, day };
 	}
 
 	$effect(() => {
-		if (app.quickAddFocus > 0) {
+		if (app.quickAddFocus > 0 && !compact) {
 			inputEl?.focus();
 		}
 	});
@@ -43,28 +43,44 @@
 			inputEl?.focus();
 			return;
 		}
-		app.addTask({ text, day: selectedDay });
+		app.addTask({ text, day: selectedDay, weekId: week?.id });
 		draft = '';
 		inputEl?.focus();
 	}
 </script>
 
-<div class="sticky bottom-0 z-20 -mx-4 mt-6 border-t bg-background/90 px-4 py-3 backdrop-blur sm:-mx-6 sm:px-6">
-	<form class="mx-auto flex w-full max-w-4xl items-center gap-2" onsubmit={(event) => { event.preventDefault(); submit(); }}>
+<div
+	class={compact
+		? 'border-t px-2 py-2'
+		: 'sticky bottom-0 z-20 -mx-4 mt-6 border-t bg-background/90 px-4 py-3 backdrop-blur sm:-mx-6 sm:px-6'}
+>
+	<form
+		class={compact ? 'flex items-center gap-1.5' : 'mx-auto flex w-full max-w-4xl items-center gap-2'}
+		onsubmit={(event) => {
+			event.preventDefault();
+			submit();
+		}}
+	>
 		<Input
 			bind:ref={inputEl}
 			bind:value={draft}
-			placeholder={t('添加任务，按 Enter 保存…')}
+			placeholder={compact ? t('添加任务…') : t('添加任务，按 Enter 保存…')}
 			maxlength={500}
 			autocomplete="off"
-			class="h-9 flex-1 bg-background"
+			class={compact ? 'h-8 text-xs' : 'h-9 flex-1 bg-background'}
 		/>
 		<Popover.Root bind:open={dayOpen}>
 			<Popover.Trigger>
 				{#snippet child({ props })}
-					<Button {...props} variant="outline" size="sm" class="h-9 text-muted-foreground">
+					<Button
+						{...props}
+						variant="outline"
+						size={compact ? 'icon-sm' : 'sm'}
+						class={compact ? 'text-muted-foreground' : 'h-9 text-muted-foreground'}
+						title={dayLabel}
+					>
 						<CalendarDays class="size-4" />
-						<span class="hidden sm:inline">{dayLabel}</span>
+						{#if !compact}<span class="hidden sm:inline">{dayLabel}</span>{/if}
 					</Button>
 				{/snippet}
 			</Popover.Trigger>
@@ -102,14 +118,19 @@
 				</Button>
 			</Popover.Content>
 		</Popover.Root>
-		<Button type="submit" size="sm" class="h-9">
-			<Plus /> {t('添加')}
+		<Button type="submit" size={compact ? 'icon-sm' : 'sm'} class={compact ? '' : 'h-9'} title={t('添加')}>
+			<Plus />
+			{#if !compact}{t('添加')}{/if}
 		</Button>
 	</form>
-	<div class="mx-auto mt-1.5 hidden w-full max-w-4xl items-center gap-3 text-[11px] text-muted-foreground sm:flex">
-		<span class="flex items-center gap-1"><CornerDownLeft class="size-3" /> {t('Enter 新建同级')}</span>
-		<span>{t('行首 Tab 缩进')}</span>
-		<span>{t('Shift+Tab 提升')}</span>
-		<span>{t('Alt+↑↓ 排序')}</span>
-	</div>
+	{#if !compact}
+		<div
+			class="mx-auto mt-1.5 hidden w-full max-w-4xl items-center gap-3 text-[11px] text-muted-foreground sm:flex"
+		>
+			<span class="flex items-center gap-1"><CornerDownLeft class="size-3" /> {t('Enter 新建同级')}</span>
+			<span>{t('行首 Tab 缩进')}</span>
+			<span>{t('Shift+Tab 提升')}</span>
+			<span>{t('Alt+↑↓ 排序')}</span>
+		</div>
+	{/if}
 </div>

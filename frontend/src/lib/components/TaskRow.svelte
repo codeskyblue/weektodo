@@ -1,6 +1,8 @@
 <script lang="ts">
 	import ArrowDown from '@lucide/svelte/icons/arrow-down';
 	import ArrowDownToLine from '@lucide/svelte/icons/arrow-down-to-line';
+	import ArrowLeft from '@lucide/svelte/icons/arrow-left';
+	import ArrowRight from '@lucide/svelte/icons/arrow-right';
 	import ArrowUp from '@lucide/svelte/icons/arrow-up';
 	import Ban from '@lucide/svelte/icons/ban';
 	import MoreHorizontal from '@lucide/svelte/icons/more-horizontal';
@@ -30,6 +32,7 @@
 	const done = $derived(task.status === 'done');
 	const dropped = $derived(task.status === 'dropped');
 	const indeterminate = $derived(isIndeterminate(task));
+	const moveOptions = $derived(app.moveOptions(task.id));
 
 	$effect(() => {
 		const request = focusRequest;
@@ -184,6 +187,21 @@
 						<DropdownMenu.Item onSelect={() => app.move(task.id, 1)}>
 							<ArrowDown class="size-4" /> {t('下移')}
 						</DropdownMenu.Item>
+						{#if moveOptions.length > 0}
+							<DropdownMenu.Separator />
+							{#each moveOptions as option (option.week.id)}
+								<DropdownMenu.Item
+									onSelect={() => app.moveTaskToWeek(task.id, option.week.id)}
+								>
+									{#if option.direction === 'previous'}
+										<ArrowLeft class="size-4" />
+									{:else}
+										<ArrowRight class="size-4" />
+									{/if}
+									{option.direction === 'previous' ? t('移到上一周') : t('移到下一周')}
+								</DropdownMenu.Item>
+							{/each}
+						{/if}
 						<DropdownMenu.Separator />
 						{#if dropped}
 							<DropdownMenu.Item onSelect={() => app.restoreTask(task.id)}>

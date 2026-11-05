@@ -25,6 +25,15 @@ const (
 	backupKeep       = 14
 )
 
+var (
+	// ErrWeekNotFound is returned when a week does not exist.
+	ErrWeekNotFound = errors.New("week not found")
+	// ErrTaskNotFound is returned when a task does not exist in the source week.
+	ErrTaskNotFound = errors.New("task not found")
+	// ErrSameWeek is returned when source and target week are identical.
+	ErrSameWeek = errors.New("source and target week are the same")
+)
+
 // Store owns the JSON documents and serializes all access to them.
 type Store struct {
 	mu       sync.RWMutex
@@ -218,6 +227,69 @@ func (s *Store) weekLocked(id string) (*model.Week, bool) {
 	return nil, false
 }
 
+// MoveTask moves one task subtree to another week and persists both changes
+// in a single write. The target week is created when it does not exist yet.
+func (s *Store) MoveTask(fromID, taskID, toID string, now time.Time) (*model.Week, *model.Week, error) {
+	if fromID == toID {
+		return nil, nil, ErrSameWeek
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	fromIndex := s.weekIndexLocked(fromID)
+	if fromIndex < 0 {
+		return nil, nil, ErrWeekNotFound
+	}
+	toIndex := s.weekIndexLocked(toID)
+
+	from := todo.CloneWeek(s.data.Weeks[fromIndex])
+	var to *model.Week
+	if toIndex >= 0 {
+		to = todo.CloneWeek(s.data.Weeks[toIndex])
+	} else {
+		created, err := todo.NewWeek(toID, now)
+		if err != nil {
+			return nil, nil, err
+		}
+		to = created
+	}
+
+	remaining, task, ok := todo.TakeTask(from.Tasks, taskID)
+	if !ok {
+		return nil, nil, ErrTaskNotFound
+	}
+	from.Tasks = remaining
+	todo.PrepareMovedTask(task, now)
+	to.Tasks = append(to.Tasks, task)
+	if err := todo.NormalizeWeek(from, now); err != nil {
+		return nil, nil, err
+	}
+	if err := todo.NormalizeWeek(to, now); err != nil {
+		return nil, nil, err
+	}
+
+	s.data.Weeks[fromIndex] = from
+	if toIndex >= 0 {
+		s.data.Weeks[toIndex] = to
+	} else {
+		s.data.Weeks = append(s.data.Weeks, to)
+	}
+	sort.Slice(s.data.Weeks, func(i, j int) bool { return s.data.Weeks[i].Start < s.data.Weeks[j].Start })
+	if err := s.saveDataLocked(); err != nil {
+		return nil, nil, err
+	}
+	return todo.CloneWeek(from), todo.CloneWeek(to), nil
+}
+
+func (s *Store) weekIndexLocked(id string) int {
+	for index, week := range s.data.Weeks {
+		if week != nil && week.ID == id {
+			return index
+		}
+	}
+	return -1
+}
+
 // ListWeeks returns summaries sorted by start date.
 func (s *Store) ListWeeks() []model.WeekSummary {
 	s.mu.RLock()
@@ -314,6 +386,7 @@ func (s *Store) UpdateSettings(next model.Settings) error {
 	next.WebDAV.Username = strings.TrimSpace(next.WebDAV.Username)
 	next.WebDAV.Password = strings.TrimSpace(next.WebDAV.Password)
 	next.WebDAV.RemoteDir = strings.Trim(strings.TrimSpace(next.WebDAV.RemoteDir), "/")
+	next.WeekSpan = normalizeWeekSpan(next.WeekSpan)
 	s.settings = next
 	return s.saveSettingsLocked()
 }
@@ -366,7 +439,7 @@ func (s *Store) loadSettings() error {
 	path := filepath.Join(s.dir, settingsFileName)
 	data, err := os.ReadFile(path)
 	if errors.Is(err, os.ErrNotExist) {
-		s.settings = model.Settings{}
+		s.settings = model.Settings{WeekSpan: 1}
 		return nil
 	}
 	if err != nil {
@@ -376,8 +449,16 @@ func (s *Store) loadSettings() error {
 	if err := json.Unmarshal(data, &parsed); err != nil {
 		return fmt.Errorf("parse %s: %w", path, err)
 	}
+	parsed.WeekSpan = normalizeWeekSpan(parsed.WeekSpan)
 	s.settings = parsed
 	return nil
+}
+
+func normalizeWeekSpan(value int) int {
+	if value == 2 || value == 3 {
+		return value
+	}
+	return 1
 }
 
 func (s *Store) loadLatestBackup() (model.Data, bool) {

@@ -54,6 +54,7 @@ func (s *Server) routes() {
 	s.mux.HandleFunc("GET /api/weeks/{id}", s.handleGetWeek)
 	s.mux.HandleFunc("POST /api/weeks/{id}", s.handleCreateWeek)
 	s.mux.HandleFunc("PUT /api/weeks/{id}", s.handleSaveWeek)
+	s.mux.HandleFunc("POST /api/weeks/{id}/move", s.handleMoveTask)
 	s.mux.HandleFunc("DELETE /api/weeks/{id}", s.handleDeleteWeek)
 	s.mux.HandleFunc("GET /api/weeks/{id}/carry-over", s.handleCarryPreview)
 	s.mux.HandleFunc("POST /api/weeks/{id}/carry-over", s.handleCarry)
@@ -103,6 +104,12 @@ func (s *Server) handleGetWeek(w http.ResponseWriter, r *http.Request) {
 	}
 	week, ok := s.store.Week(id)
 	if !ok {
+		// Multi-week views ask optimistically for neighbouring weeks and
+		// treat a missing week as an empty placeholder.
+		if r.URL.Query().Get("optional") == "1" {
+			writeJSON(w, http.StatusOK, map[string]any{"week": nil})
+			return
+		}
 		writeError(w, http.StatusNotFound, "not_found", "这一周还没有记录")
 		return
 	}

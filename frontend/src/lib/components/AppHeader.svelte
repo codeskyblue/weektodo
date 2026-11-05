@@ -94,6 +94,27 @@
 					</span>
 					<Progress value={app.progress} class="w-20" />
 				</div>
+				<div
+					class="flex items-center rounded-md border bg-background p-0.5"
+					role="group"
+					aria-label={t('显示周数')}
+				>
+					{#each [1, 2, 3] as count (count)}
+						<button
+							type="button"
+							class="min-w-6 whitespace-nowrap rounded px-1.5 py-1 text-xs tabular-nums text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+							class:bg-muted={app.weekSpan === count}
+							class:font-medium={app.weekSpan === count}
+							class:text-foreground={app.weekSpan === count}
+							onclick={() => app.setWeekSpan(count as 1 | 2 | 3)}
+							title={t('显示 {count} 周', { count })}
+							aria-pressed={app.weekSpan === count}
+						>
+							<span class="hidden sm:inline">{t('{count}周', { count })}</span>
+							<span class="sm:hidden">{count}</span>
+						</button>
+					{/each}
+				</div>
 				<Button variant="outline" size="sm" onclick={() => app.openReport()}>
 					<FileText />
 					<span class="hidden sm:inline">{t('周报')}</span>

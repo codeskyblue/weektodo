@@ -1,6 +1,7 @@
 package store
 
 import (
+	"errors"
 	"os"
 	"path/filepath"
 	"testing"
@@ -236,5 +237,98 @@ func TestExplicitDirDoesNotMigrate(t *testing.T) {
 	}
 	if len(st.ListWeeks()) != 0 {
 		t.Fatalf("explicit dir should not inherit legacy data")
+	}
+}
+
+func TestMoveTaskAcrossWeeks(t *testing.T) {
+	dir := t.TempDir()
+	st, err := New(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	now := time.Date(2026, 11, 5, 12, 0, 0, 0, time.Local)
+	source, err := todo.NewWeek("2026-W45", now)
+	if err != nil {
+		t.Fatal(err)
+	}
+	source.Tasks = []*model.Task{{
+		ID:          "parent",
+		Text:        "parent",
+		Status:      model.StatusTodo,
+		Day:         "2026-11-05",
+		UpdatedAt:   now.Add(-time.Hour).Format(time.RFC3339),
+		CarriedFrom: &model.CarriedFrom{WeekID: "2026-W44", TaskID: "old"},
+		Children: []*model.Task{{
+			ID:       "child",
+			Text:     "child",
+			Status:   model.StatusTodo,
+			Day:      "2026-11-06",
+			Children: []*model.Task{},
+		}},
+	}}
+	if _, err := st.SaveWeek(source); err != nil {
+		t.Fatal(err)
+	}
+
+	from, to, err := st.MoveTask("2026-W45", "parent", "2026-W46", now)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(from.Tasks) != 0 {
+		t.Fatalf("source tasks = %+v", from.Tasks)
+	}
+	if to.ID != "2026-W46" || to.Start != "2026-11-09" || len(to.Tasks) != 1 {
+		t.Fatalf("target = %+v", to)
+	}
+	moved := to.Tasks[0]
+	if moved.ID != "parent" || moved.Day != "" || moved.CarriedFrom != nil {
+		t.Fatalf("moved = %+v", moved)
+	}
+	if moved.UpdatedAt != now.Format(time.RFC3339) {
+		t.Fatalf("updatedAt = %q", moved.UpdatedAt)
+	}
+	if len(moved.Children) != 1 || moved.Children[0].Day != "" || moved.Children[0].UpdatedAt != now.Format(time.RFC3339) {
+		t.Fatalf("children = %+v", moved.Children)
+	}
+
+	reloaded, err := New(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	savedTarget, ok := reloaded.Week("2026-W46")
+	if !ok || len(savedTarget.Tasks) != 1 || savedTarget.Tasks[0].ID != "parent" {
+		t.Fatalf("reloaded target = %+v, %v", savedTarget, ok)
+	}
+	savedSource, ok := reloaded.Week("2026-W45")
+	if !ok || len(savedSource.Tasks) != 0 {
+		t.Fatalf("reloaded source = %+v, %v", savedSource, ok)
+	}
+}
+
+func TestMoveTaskErrors(t *testing.T) {
+	st, err := New(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	now := time.Now()
+	week, err := todo.NewWeek("2026-W45", now)
+	if err != nil {
+		t.Fatal(err)
+	}
+	week.Tasks = []*model.Task{{ID: "a", Text: "a", Status: model.StatusTodo, Children: []*model.Task{}}}
+	if _, err := st.SaveWeek(week); err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err := st.MoveTask("2026-W45", "a", "2026-W45", now); !errors.Is(err, ErrSameWeek) {
+		t.Fatalf("same week err = %v", err)
+	}
+	if _, _, err := st.MoveTask("2026-W44", "a", "2026-W46", now); !errors.Is(err, ErrWeekNotFound) {
+		t.Fatalf("missing week err = %v", err)
+	}
+	if _, _, err := st.MoveTask("2026-W45", "missing", "2026-W46", now); !errors.Is(err, ErrTaskNotFound) {
+		t.Fatalf("missing task err = %v", err)
+	}
+	if _, ok := st.Week("2026-W46"); ok {
+		t.Fatal("failed move must not create an empty target week")
 	}
 }

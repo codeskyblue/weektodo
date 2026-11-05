@@ -70,6 +70,29 @@ export function saveWeek(id: string, tasks: Task[]): Promise<{ week: Week }> {
 	});
 }
 
+export async function getWeekOrNull(id: string): Promise<Week | null> {
+	try {
+		const response = await request<{ week: Week | null }>(
+			`/weeks/${encodeURIComponent(id)}?optional=1`
+		);
+		return response.week;
+	} catch (error) {
+		if (error instanceof ApiError && error.status === 404) return null;
+		throw error;
+	}
+}
+
+export function moveTask(
+	fromWeekId: string,
+	taskId: string,
+	toWeekId: string
+): Promise<{ from: Week; to: Week }> {
+	return request(`/weeks/${encodeURIComponent(fromWeekId)}/move`, {
+		method: 'POST',
+		body: JSON.stringify({ taskId, toWeekId })
+	});
+}
+
 export function carryPreview(id: string): Promise<CarryPreview> {
 	return request(`/weeks/${encodeURIComponent(id)}/carry-over`);
 }
@@ -189,5 +212,12 @@ export function saveLanguage(language: 'zh' | 'en'): Promise<SettingsPublic> {
 	return request('/settings', {
 		method: 'PUT',
 		body: JSON.stringify({ language })
+	});
+}
+
+export function saveWeekSpan(weekSpan: 1 | 2 | 3): Promise<SettingsPublic> {
+	return request('/settings', {
+		method: 'PUT',
+		body: JSON.stringify({ weekSpan })
 	});
 }

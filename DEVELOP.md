@@ -45,8 +45,8 @@ WEEKTODO_DATA_DIR=/tmp/weektodo-dev make dev
 `Assets.Handler` 复用同一个 handler，所以浏览器和桌面端行为一致。
 
 - `internal/model`：`Week` / `Task` / `Settings`
-- `internal/store`：读取、原子写入、每日备份、今日计数
-- `internal/todo`：ISO 周计算、父状态推导、跨周带入、周报
+- `internal/store`：读取、原子写入、每日备份、今日计数、跨周移动
+- `internal/todo`：ISO 周计算、父状态推导、跨周带入、跨周移动、周报
 - `internal/ai`：OpenAI 兼容的 `/chat/completions`
 - `internal/server`：REST API、设置、静态资源
 - `desktop`：Wails v3 窗口、菜单栏托盘、今日数量
@@ -58,9 +58,10 @@ WEEKTODO_DATA_DIR=/tmp/weektodo-dev make dev
 | GET | `/api/health` | 健康检查 |
 | GET | `/api/meta` | 数据目录、版本、当前周 |
 | GET | `/api/weeks` | 周列表 |
-| GET | `/api/weeks/{id}` | 读取一周 |
+| GET | `/api/weeks/{id}` | 读取一周，`?optional=1` 时不存在返回 `week: null` |
 | POST | `/api/weeks/{id}` | 创建空周 |
 | PUT | `/api/weeks/{id}` | 保存整周任务树 |
+| POST | `/api/weeks/{id}/move` | 把任务子树移到另一周 |
 | DELETE | `/api/weeks/{id}` | 删除一周 |
 | GET | `/api/weeks/{id}/carry-over` | 预览上周可带入任务 |
 | POST | `/api/weeks/{id}/carry-over` | 执行带入 |
@@ -141,6 +142,15 @@ Release Notes 由 `scripts/release-notes.sh` 从上一个 tag 到当前 tag 的�
 ```bash
 ./scripts/release-notes.sh v0.2.0
 ```
+
+## 多周视图
+
+- `settings.json` 的 `weekSpan` 保存 1 / 2 / 3 周，默认 1。
+- 前端以当前浏览周为锚点计算窗口：2 周为「上一周 + 当前」，3 周为「上一周 + 当前 + 下一周」。左右箭头平移锚点。
+- 相邻周通过 `GET /api/weeks/{id}?optional=1` 读取；不存在时前端生成内存占位，只有添加任务或移入任务时才写入 `data.json`。
+- `POST /api/weeks/{id}/move` 调用 `Store.MoveTask`：克隆源周和目标周、摘下整棵子树、清空日期和 `carriedFrom`、更新时间戳，最后一次性保存。目标周不存在时自动创建。
+- 前端按周维护脏标记，统一防抖保存；切换窗口、跨周移动或 WebDAV 同步前会先等待未完成的保存。
+- 多周视图每列复用 `TaskList` 和紧凑版 `QuickAdd`，`TaskRow` / `DayPicker` 通过任务 ID 定位所属周。
 
 ## WebDAV 同步
 

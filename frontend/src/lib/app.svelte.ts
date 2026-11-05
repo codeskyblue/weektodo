@@ -1,6 +1,14 @@
 import { toast } from 'svelte-sonner';
 import * as api from './api';
-import { addDays, weekIdFor, todayISO } from './date';
+import {
+	addDays,
+	formatWeekTitle,
+	nextWeekId,
+	previousWeekId,
+	weekIdFor,
+	weekStart,
+	todayISO
+} from './date';
 import type {
 	CarryPreview,
 	ConfirmOptions,
@@ -45,6 +53,15 @@ export interface ConfirmState extends ConfirmOptions {
 
 const emptyStats = (): Stats => ({ total: 0, done: 0, dropped: 0, unplanned: 0 });
 
+function normalizeWeekSpan(value: number | undefined): 1 | 2 | 3 {
+	return value === 2 || value === 3 ? value : 1;
+}
+
+function placeholderWeek(id: string): Week {
+	const start = weekStart(id);
+	return { id, start, end: addDays(start, 6), tasks: [] };
+}
+
 function messageOf(error: unknown): string {
 	if (error instanceof api.ApiError) return error.message;
 	if (error instanceof Error) return error.message;
@@ -57,7 +74,10 @@ function taskLabel(task: Task): string {
 }
 
 class AppState {
-	week = $state<Week | null>(null);
+	weeks = $state<Week[]>([]);
+	anchorId = $state('');
+	weekSpan = $state<1 | 2 | 3>(1);
+	moveBusy = $state(false);
 	meta = $state<Meta | null>(null);
 	settings = $state<SettingsPublic | null>(null);
 	currentWeekId = $state(weekIdFor(todayISO()));
@@ -87,7 +107,7 @@ class AppState {
 	quickAddFocus = $state(0);
 	focusRequest = $state<{ id: string; caret: 'start' | 'end'; nonce: number } | null>(null);
 
-	private dirty = false;
+	private dirtyWeeks = new Set<string>();
 	private saving = false;
 	private revision = 0;
 	private saveTimer: ReturnType<typeof setTimeout> | null = null;
@@ -96,18 +116,48 @@ class AppState {
 	private loadSeq = 0;
 	private wailsBound = false;
 
+	get week(): Week | null {
+		return this.weeks.find((week) => week.id === this.anchorId) ?? null;
+	}
+
 	get rows(): TaskRow[] {
-		if (!this.week) return [];
-		return visibleRows(this.week.tasks, this.filter, this.today);
+		return this.week ? this.rowsFor(this.week) : [];
+	}
+
+	rowsFor(week: Week): TaskRow[] {
+		return visibleRows(week.tasks, this.filter, this.today);
 	}
 
 	get stats(): Stats {
 		return this.week ? leafStats(this.week.tasks) : emptyStats();
 	}
 
+	statsFor(week: Week): Stats {
+		return leafStats(week.tasks);
+	}
+
 	get progress(): number {
-		const stats = this.stats;
+		return this.week ? this.progressFor(this.week) : 0;
+	}
+
+	progressFor(week: Week): number {
+		const stats = this.statsFor(week);
 		return stats.total === 0 ? 0 : Math.round((stats.done / stats.total) * 100);
+	}
+
+	weekById(id: string): Week | null {
+		return this.weeks.find((week) => week.id === id) ?? null;
+	}
+
+	weekOfTask(taskId: string): Week | null {
+		for (const week of this.weeks) {
+			if (findTask(week.tasks, taskId)) return week;
+		}
+		return null;
+	}
+
+	isCurrent(week: Week): boolean {
+		return week.id === this.currentWeekId;
 	}
 
 	get reportText(): string {
@@ -138,6 +188,7 @@ class AppState {
 			]);
 			this.meta = meta;
 			this.settings = settings;
+			this.weekSpan = normalizeWeekSpan(settings.weekSpan);
 			const language: Language =
 				settings.language === 'zh' || settings.language === 'en' ? settings.language : i18n.language;
 			i18n.setLanguage(language);
@@ -146,7 +197,7 @@ class AppState {
 			this.currentWeekId = weeks.currentWeekId;
 			const wanted = new URLSearchParams(window.location.search).get('week');
 			const initial = wanted && /^\d{4}-W\d{2}$/.test(wanted) ? wanted : meta.currentWeekId;
-			await this.loadWeek(initial);
+			await this.loadWindow(initial);
 			this.startClock();
 		} catch (error) {
 			this.error = messageOf(error);
@@ -165,26 +216,34 @@ class AppState {
 		}, 30_000);
 	}
 
-	async loadWeek(id: string): Promise<void> {
+	async loadWindow(anchorId: string): Promise<void> {
 		const token = ++this.loadSeq;
 		this.navigating = true;
 		this.error = '';
 		await this.flushSave();
+		await this.waitForSave();
 		try {
-			// Ensure is idempotent: it returns the week when it already exists.
-			const week: Week = (await api.createWeek(id)).week;
+			// The anchor week is created on demand, while neighbouring weeks
+			// stay in memory until something is actually written to them.
+			const weeks = await Promise.all(
+				this.windowIds(anchorId).map(async (id) => {
+					if (id === anchorId) return (await api.createWeek(id)).week;
+					return (await api.getWeekOrNull(id)) ?? placeholderWeek(id);
+				})
+			);
 			if (token !== this.loadSeq) return;
-			this.week = week;
+			this.weeks = weeks;
+			this.anchorId = anchorId;
 			this.currentWeekId = this.currentWeekId || weekIdFor(todayISO());
 			this.filter = 'all';
 			this.reportMarkdown = '';
 			this.aiMarkdown = '';
 			this.reportError = '';
 			this.saveStatus = 'saved';
-			this.dirty = false;
+			this.dirtyWeeks.clear();
 			this.revision++;
 			const url = new URL(window.location.href);
-			url.searchParams.set('week', week.id);
+			url.searchParams.set('week', anchorId);
 			window.history.replaceState(null, '', url);
 		} catch (error) {
 			if (token === this.loadSeq) this.error = messageOf(error);
@@ -193,9 +252,20 @@ class AppState {
 		}
 	}
 
+	private windowIds(anchorId: string): string[] {
+		switch (this.weekSpan) {
+			case 3:
+				return [previousWeekId(anchorId), anchorId, nextWeekId(anchorId)];
+			case 2:
+				return [previousWeekId(anchorId), anchorId];
+			default:
+				return [anchorId];
+		}
+	}
+
 	async goToWeek(id: string): Promise<void> {
-		if (id === this.week?.id) return;
-		await this.loadWeek(id);
+		if (id === this.anchorId) return;
+		await this.loadWindow(id);
 	}
 
 	async goToday(): Promise<void> {
@@ -211,8 +281,9 @@ class AppState {
 		this.focusRequest = { id, caret, nonce: ++this.focusSeq };
 	}
 
-	markDirty(): void {
-		this.dirty = true;
+	markDirty(weekId = this.anchorId): void {
+		if (!weekId) return;
+		this.dirtyWeeks.add(weekId);
 		this.revision++;
 		this.saveStatus = 'saving';
 		if (this.saveTimer) clearTimeout(this.saveTimer);
@@ -227,23 +298,28 @@ class AppState {
 			clearTimeout(this.saveTimer);
 			this.saveTimer = null;
 		}
-		if (!this.week || !this.dirty || this.saving) return;
-		this.dirty = false;
+		if (this.dirtyWeeks.size === 0 || this.saving) return;
+		const ids = [...this.dirtyWeeks];
+		this.dirtyWeeks.clear();
 		this.saving = true;
 		this.saveStatus = 'saving';
-		const weekId = this.week.id;
 		const revision = this.revision;
-		const tasks = JSON.parse(JSON.stringify(this.week.tasks)) as Task[];
-		try {
-			await api.saveWeek(weekId, tasks);
-			if (revision === this.revision) {
-				this.saveStatus = 'saved';
-				this.saveError = '';
+		let failure: unknown = null;
+		for (const id of ids) {
+			const week = this.weekById(id);
+			if (!week) continue;
+			const tasks = JSON.parse(JSON.stringify(week.tasks)) as Task[];
+			try {
+				await api.saveWeek(id, tasks);
+			} catch (error) {
+				failure ??= error;
+				this.dirtyWeeks.add(id);
 			}
-			emitWails('weektodo:changed');
-		} catch (error) {
+		}
+		this.saving = false;
+		if (failure) {
 			this.saveStatus = 'error';
-			this.saveError = messageOf(error);
+			this.saveError = messageOf(failure);
 			toast.error(t('保存失败'), {
 				description: this.saveError,
 				action: {
@@ -251,86 +327,110 @@ class AppState {
 					onClick: () => this.retrySave()
 				}
 			});
-		} finally {
-			this.saving = false;
-			if (this.dirty) void this.flushSave();
+			return;
 		}
+		if (revision === this.revision) {
+			this.saveStatus = 'saved';
+			this.saveError = '';
+		}
+		emitWails('weektodo:changed');
+		if (this.dirtyWeeks.size > 0) void this.flushSave();
 	}
 
 	retrySave(): void {
-		this.dirty = true;
 		void this.flushSave();
 	}
 
-	addTask(options: { text?: string; parentId?: string; day?: string | null } = {}): Task | null {
-		if (!this.week) return null;
+	private async waitForSave(): Promise<void> {
+		for (let attempt = 0; attempt < 120 && this.saving; attempt++) {
+			await new Promise((resolve) => setTimeout(resolve, 50));
+		}
+	}
+
+	private replaceWeek(week: Week): void {
+		const index = this.weeks.findIndex((item) => item.id === week.id);
+		if (index >= 0) this.weeks[index] = week;
+		else this.weeks.push(week);
+		this.weeks = [...this.weeks].sort((a, b) => a.start.localeCompare(b.start));
+	}
+
+	addTask(
+		options: { text?: string; parentId?: string; day?: string | null; weekId?: string } = {}
+	): Task | null {
+		const week = this.weekById(options.weekId ?? this.anchorId);
+		if (!week) return null;
 		const day =
 			options.day !== undefined
 				? options.day
-				: this.isCurrentWeek
+				: this.isCurrent(week)
 					? this.today
 					: null;
 		const task = newTask(options.text ?? '', day);
 		if (options.parentId) {
-			const parent = findTask(this.week.tasks, options.parentId);
+			const parent = findTask(week.tasks, options.parentId);
 			if (!parent || parent.status === 'dropped') return null;
 			appendChild(parent, task);
 		} else {
-			this.week.tasks.push(task);
+			week.tasks.push(task);
 		}
-		recomputeParents(this.week.tasks);
+		recomputeParents(week.tasks);
 		if (this.filter === 'done' || this.filter === 'dropped') this.filter = 'all';
 		if (this.filter === 'today' && day !== this.today) this.filter = 'all';
 		this.requestFocus(task.id, 'end');
-		this.markDirty();
+		this.markDirty(week.id);
 		return task;
 	}
 
 	addSibling(taskId: string): void {
-		if (!this.week) return;
-		const found = locate(this.week.tasks, taskId);
+		const week = this.weekOfTask(taskId);
+		if (!week) return;
+		const found = locate(week.tasks, taskId);
 		if (!found) return;
-		const task = newTask('', found.task.day ?? (this.isCurrentWeek ? this.today : null));
-		siblingInsert(this.week.tasks, taskId, task);
-		recomputeParents(this.week.tasks);
+		const task = newTask('', found.task.day ?? (this.isCurrent(week) ? this.today : null));
+		siblingInsert(week.tasks, taskId, task);
+		recomputeParents(week.tasks);
 		this.requestFocus(task.id, 'end');
-		this.markDirty();
+		this.markDirty(week.id);
 	}
 
 	addChild(taskId: string): void {
-		if (!this.week) return;
-		const found = locate(this.week.tasks, taskId);
+		const week = this.weekOfTask(taskId);
+		if (!week) return;
+		const found = locate(week.tasks, taskId);
 		if (!found || found.task.status === 'dropped') return;
-		const task = newTask('', found.task.day ?? (this.isCurrentWeek ? this.today : null));
+		const task = newTask('', found.task.day ?? (this.isCurrent(week) ? this.today : null));
 		appendChild(found.task, task);
-		recomputeParents(this.week.tasks);
+		recomputeParents(week.tasks);
 		this.requestFocus(task.id, 'end');
-		this.markDirty();
+		this.markDirty(week.id);
 	}
 
 	updateText(taskId: string, text: string): void {
-		if (!this.week) return;
-		const task = findTask(this.week.tasks, taskId);
+		const week = this.weekOfTask(taskId);
+		if (!week) return;
+		const task = findTask(week.tasks, taskId);
 		if (!task) return;
 		task.text = text;
 		task.updatedAt = nowISO();
-		this.markDirty();
+		this.markDirty(week.id);
 	}
 
 	setDay(taskId: string, day: string | null): void {
-		if (!this.week) return;
-		const task = findTask(this.week.tasks, taskId);
+		const week = this.weekOfTask(taskId);
+		if (!week) return;
+		const task = findTask(week.tasks, taskId);
 		if (!task) return;
-		if (day && (day < this.week.start || day > this.week.end)) return;
+		if (day && (day < week.start || day > week.end)) return;
 		if (day) task.day = day;
 		else delete task.day;
 		task.updatedAt = nowISO();
-		this.markDirty();
+		this.markDirty(week.id);
 	}
 
 	toggleTask(taskId: string): void {
-		if (!this.week) return;
-		const found = locate(this.week.tasks, taskId);
+		const week = this.weekOfTask(taskId);
+		if (!week) return;
+		const found = locate(week.tasks, taskId);
 		if (!found) return;
 		const task = found.task;
 		if (task.status === 'dropped') return;
@@ -342,28 +442,29 @@ class AppState {
 				confirmLabel: t('全部完成'),
 				onConfirm: () => {
 					completeSubtree(task);
-					recomputeParents(this.week!.tasks);
-					this.markDirty();
+					recomputeParents(week.tasks);
+					this.markDirty(week.id);
 				}
 			});
 			return;
 		}
 		if (task.status === 'done') uncompleteSubtree(task);
 		else completeSubtree(task);
-		recomputeParents(this.week.tasks);
-		this.markDirty();
+		recomputeParents(week.tasks);
+		this.markDirty(week.id);
 	}
 
 	dropTask(taskId: string): void {
-		if (!this.week) return;
-		const found = locate(this.week.tasks, taskId);
+		const week = this.weekOfTask(taskId);
+		if (!week) return;
+		const found = locate(week.tasks, taskId);
 		if (!found || found.task.status === 'dropped') return;
 		const task = found.task;
 		const total = countNodes(task);
 		const apply = (): void => {
 			dropSubtree(task);
-			recomputeParents(this.week!.tasks);
-			this.markDirty();
+			recomputeParents(week.tasks);
+			this.markDirty(week.id);
 			toast.success(t('已废弃'), {
 				action: {
 					label: t('撤销'),
@@ -385,21 +486,23 @@ class AppState {
 	}
 
 	restoreTask(taskId: string): void {
-		if (!this.week) return;
-		const found = locate(this.week.tasks, taskId);
+		const week = this.weekOfTask(taskId);
+		if (!week) return;
+		const found = locate(week.tasks, taskId);
 		if (!found) return;
 		restoreSubtree(found.task);
-		recomputeParents(this.week.tasks);
-		this.markDirty();
+		recomputeParents(week.tasks);
+		this.markDirty(week.id);
 	}
 
 	deleteTask(taskId: string): void {
-		if (!this.week) return;
-		const found = locate(this.week.tasks, taskId);
+		const week = this.weekOfTask(taskId);
+		if (!week) return;
+		const found = locate(week.tasks, taskId);
 		if (!found) return;
 		const task = found.task;
 		const total = countNodes(task);
-		const rows = this.rows;
+		const rows = this.rowsFor(week);
 		const rowIndex = rows.findIndex((row) => row.task.id === taskId);
 		const fallbackFocus = rowIndex > 0 ? rows[rowIndex - 1].task.id : null;
 		this.askConfirm({
@@ -411,56 +514,60 @@ class AppState {
 			confirmLabel: t('删除'),
 			destructive: true,
 			onConfirm: () => {
-				removeTask(this.week!.tasks, taskId);
-				recomputeParents(this.week!.tasks);
+				removeTask(week.tasks, taskId);
+				recomputeParents(week.tasks);
 				if (fallbackFocus) this.requestFocus(fallbackFocus, 'end');
-				this.markDirty();
+				this.markDirty(week.id);
 			}
 		});
 	}
 
 	removeEmptyTask(taskId: string): void {
-		if (!this.week) return;
-		const found = locate(this.week.tasks, taskId);
+		const week = this.weekOfTask(taskId);
+		if (!week) return;
+		const found = locate(week.tasks, taskId);
 		if (!found) return;
 		if (found.task.text.trim() !== '' || found.task.children.length > 0) return;
-		const rows = this.rows;
+		const rows = this.rowsFor(week);
 		const rowIndex = rows.findIndex((row) => row.task.id === taskId);
 		const fallbackFocus = rowIndex > 0 ? rows[rowIndex - 1].task.id : null;
-		removeTask(this.week.tasks, taskId);
-		recomputeParents(this.week.tasks);
+		removeTask(week.tasks, taskId);
+		recomputeParents(week.tasks);
 		if (fallbackFocus) this.requestFocus(fallbackFocus, 'end');
-		this.markDirty();
+		this.markDirty(week.id);
 	}
 
 	indent(taskId: string): void {
-		if (!this.week) return;
-		const task = findTask(this.week.tasks, taskId);
+		const week = this.weekOfTask(taskId);
+		if (!week) return;
+		const task = findTask(week.tasks, taskId);
 		if (!task) return;
-		if (!indentTask(this.week.tasks, taskId)) return;
+		if (!indentTask(week.tasks, taskId)) return;
 		task.updatedAt = nowISO();
-		recomputeParents(this.week.tasks);
+		recomputeParents(week.tasks);
 		this.requestFocus(taskId, 'start');
-		this.markDirty();
+		this.markDirty(week.id);
 	}
 
 	outdent(taskId: string): void {
-		if (!this.week) return;
-		if (!outdentTask(this.week.tasks, taskId)) return;
-		const task = findTask(this.week.tasks, taskId);
+		const week = this.weekOfTask(taskId);
+		if (!week) return;
+		if (!outdentTask(week.tasks, taskId)) return;
+		const task = findTask(week.tasks, taskId);
 		if (task) task.updatedAt = nowISO();
-		recomputeParents(this.week.tasks);
+		recomputeParents(week.tasks);
 		this.requestFocus(taskId, 'start');
-		this.markDirty();
+		this.markDirty(week.id);
 	}
 
 	move(taskId: string, delta: number): void {
-		if (!this.week) return;
-		if (!moveSibling(this.week.tasks, taskId, delta)) return;
-		const task = findTask(this.week.tasks, taskId);
+		const week = this.weekOfTask(taskId);
+		if (!week) return;
+		if (!moveSibling(week.tasks, taskId, delta)) return;
+		const task = findTask(week.tasks, taskId);
 		if (task) task.updatedAt = nowISO();
 		this.requestFocus(taskId, 'start');
-		this.markDirty();
+		this.markDirty(week.id);
 	}
 
 	askConfirm(options: ConfirmOptions): void {
@@ -514,11 +621,11 @@ class AppState {
 					this.carryBusy = true;
 					try {
 						const result = await api.carryOver(weekId);
-						this.week = result.week;
+						this.replaceWeek(result.week);
+						this.dirtyWeeks.delete(result.week.id);
 						this.reportMarkdown = '';
 						this.aiMarkdown = '';
 						this.saveStatus = 'saved';
-						this.dirty = false;
 						this.revision++;
 						if (result.created > 0) {
 							toast.success(t('已带入 {count} 个任务', { count: result.created }), {
@@ -638,7 +745,9 @@ class AppState {
 	}
 
 	async syncWebDAV(draft: api.WebDAVDraft): Promise<api.WebDAVSyncResult | null> {
-		const weekID = this.week?.id;
+		const weekID = this.anchorId;
+		await this.flushSave();
+		await this.waitForSave();
 		await this.flushSave();
 		try {
 			const result = await api.syncWebDAV(draft);
@@ -649,13 +758,61 @@ class AppState {
 				})
 			);
 			if (weekID) {
-				this.dirty = false;
-				await this.loadWeek(weekID);
+				await this.loadWindow(weekID);
 			}
 			return result;
 		} catch (error) {
 			toast.error(t('同步失败'), { description: messageOf(error) });
 			return null;
+		}
+	}
+
+	async setWeekSpan(span: 1 | 2 | 3): Promise<void> {
+		if (span === this.weekSpan) return;
+		await this.flushSave();
+		await this.waitForSave();
+		this.weekSpan = span;
+		try {
+			this.settings = await api.saveWeekSpan(span);
+		} catch (error) {
+			toast.error(t('保存设置失败'), { description: messageOf(error) });
+		}
+		if (this.anchorId) await this.loadWindow(this.anchorId);
+	}
+
+	moveOptions(taskId: string): { week: Week; direction: 'previous' | 'next' }[] {
+		const week = this.weekOfTask(taskId);
+		if (!week || this.weeks.length < 2) return [];
+		const index = this.weeks.findIndex((item) => item.id === week.id);
+		if (index < 0) return [];
+		const options: { week: Week; direction: 'previous' | 'next' }[] = [];
+		if (index > 0) options.push({ week: this.weeks[index - 1], direction: 'previous' });
+		if (index < this.weeks.length - 1) {
+			options.push({ week: this.weeks[index + 1], direction: 'next' });
+		}
+		return options;
+	}
+
+	async moveTaskToWeek(taskId: string, toWeekId: string): Promise<void> {
+		if (this.moveBusy) return;
+		const from = this.weekOfTask(taskId);
+		if (!from || from.id === toWeekId) return;
+		this.moveBusy = true;
+		await this.flushSave();
+		await this.waitForSave();
+		await this.flushSave();
+		try {
+			const result = await api.moveTask(from.id, taskId, toWeekId);
+			this.replaceWeek(result.from);
+			this.replaceWeek(result.to);
+			this.dirtyWeeks.delete(result.from.id);
+			this.dirtyWeeks.delete(result.to.id);
+			toast.success(t('已移到 {week}', { week: formatWeekTitle(result.to.id) }));
+			emitWails('weektodo:changed');
+		} catch (error) {
+			toast.error(t('移动失败'), { description: messageOf(error) });
+		} finally {
+			this.moveBusy = false;
 		}
 	}
 

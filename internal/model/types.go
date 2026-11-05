@@ -63,6 +63,7 @@ type WebDAVConfig struct {
 type Settings struct {
 	AI       AIConfig     `json:"ai"`
 	WebDAV   WebDAVConfig `json:"webdav"`
+	WeekSpan int          `json:"weekSpan,omitempty"`
 	Language string       `json:"language,omitempty"`
 }
 
