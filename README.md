@@ -2,6 +2,8 @@
 
 一个按周记录待办的桌面应用：层级任务、父子联动、跨周带入、周报总结，数据全部保存在本地 JSON 文件里。
 
+![WeekTodo 桌面端](docs/weektodo.png)
+
 使用 Go + Wails v3 + SvelteKit + shadcn-svelte 构建。关闭窗口后常驻 macOS 菜单栏，图标旁显示今天未完成的任务数。
 
 ## 功能
