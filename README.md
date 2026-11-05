@@ -90,7 +90,7 @@ WEEKTODO_UPDATE_API=...
 
 ## 数据
 
-默认目录（macOS）：`~/Library/Application Support/WeekTodo/`
+默认目录：`~/.config/weektodo/`（macOS / Linux），Windows 使用 `%AppData%\weektodo\`。
 
 ```text
 data.json          所有周的任务
@@ -99,6 +99,8 @@ backups/           每天首次保存前的自动备份，保留 14 天
 ```
 
 `data.json` 是普通 JSON，可以直接备份或版本管理。开发时可以用 `WEEKTODO_DATA_DIR` 覆盖目录。
+
+从旧版本升级时，如果新目录还没有 `data.json`，会自动从 `~/Library/Application Support/WeekTodo/`（旧版 macOS 默认目录）、`~/.weektodo-dev/` 或 `~/.weektodo/` 复制数据、设置和备份，旧目录不会被删除。
 
 ## AI 周报
 

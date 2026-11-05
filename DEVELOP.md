@@ -28,7 +28,7 @@ make icons      # 从 SVG 重新生成托盘/应用图标
 make dev
 # 前端 http://localhost:5173
 # 后端 http://127.0.0.1:8787
-# 数据目录 $HOME/.weektodo-dev
+# 数据目录 ~/.config/weektodo/
 ```
 
 可用环境变量：

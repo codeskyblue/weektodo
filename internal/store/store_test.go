@@ -149,3 +149,92 @@ func TestListWeeksSorted(t *testing.T) {
 		t.Fatalf("weeks = %+v", weeks)
 	}
 }
+
+func TestDefaultDirUsesConfigHome(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("WEEKTODO_DATA_DIR", "")
+	t.Setenv("HOME", home)
+	t.Setenv("XDG_CONFIG_HOME", "")
+	want := filepath.Join(home, ".config", "weektodo")
+	if got := DefaultDir(); got != want {
+		t.Fatalf("DefaultDir = %q, want %q", got, want)
+	}
+
+	xdg := filepath.Join(home, "xdg")
+	t.Setenv("XDG_CONFIG_HOME", xdg)
+	if got, want := DefaultDir(), filepath.Join(xdg, "weektodo"); got != want {
+		t.Fatalf("DefaultDir with XDG = %q, want %q", got, want)
+	}
+
+	t.Setenv("WEEKTODO_DATA_DIR", filepath.Join(home, "custom"))
+	if got, want := DefaultDir(), filepath.Join(home, "custom"); got != want {
+		t.Fatalf("DefaultDir with override = %q, want %q", got, want)
+	}
+}
+
+func TestMigrateLegacyDir(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("WEEKTODO_DATA_DIR", "")
+	t.Setenv("HOME", home)
+	t.Setenv("XDG_CONFIG_HOME", "")
+
+	legacy := filepath.Join(home, ".weektodo-dev")
+	if err := os.MkdirAll(filepath.Join(legacy, backupDirName), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	data := `{"version":1,"weeks":[{"id":"2026-W45","start":"2026-11-02","end":"2026-11-08","tasks":[{"id":"a","text":"legacy task","status":"todo","children":[]}]}]}`
+	if err := os.WriteFile(filepath.Join(legacy, dataFileName), []byte(data), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	settings := `{"ai":{"baseUrl":"https://example.com/v1","model":"m","apiKey":"secret"},"language":"en"}`
+	if err := os.WriteFile(filepath.Join(legacy, settingsFileName), []byte(settings), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(legacy, backupDirName, "data-2026-11-05.json"), []byte(data), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	st, err := New("")
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := filepath.Join(home, ".config", "weektodo")
+	if st.Dir() != want {
+		t.Fatalf("Dir = %q, want %q", st.Dir(), want)
+	}
+	if week, ok := st.Week("2026-W45"); !ok || week.Tasks[0].Text != "legacy task" {
+		t.Fatalf("week = %+v, %v", week, ok)
+	}
+	if st.Settings().Language != "en" || st.Settings().AI.APIKey != "secret" {
+		t.Fatalf("settings = %+v", st.Settings())
+	}
+	if _, err := os.Stat(filepath.Join(want, backupDirName, "data-2026-11-05.json")); err != nil {
+		t.Fatalf("backup not copied: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(legacy, dataFileName)); err != nil {
+		t.Fatalf("legacy data must be kept: %v", err)
+	}
+}
+
+func TestExplicitDirDoesNotMigrate(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("WEEKTODO_DATA_DIR", "")
+	t.Setenv("HOME", home)
+	t.Setenv("XDG_CONFIG_HOME", "")
+	legacy := filepath.Join(home, ".weektodo-dev")
+	if err := os.MkdirAll(legacy, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	data := `{"version":1,"weeks":[]}`
+	if err := os.WriteFile(filepath.Join(legacy, dataFileName), []byte(data), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	st, err := New(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(st.ListWeeks()) != 0 {
+		t.Fatalf("explicit dir should not inherit legacy data")
+	}
+}

@@ -5,8 +5,10 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"io/fs"
 	"os"
 	"path/filepath"
+	"runtime"
 	"sort"
 	"strings"
 	"sync"
@@ -31,22 +33,44 @@ type Store struct {
 	settings model.Settings
 }
 
-// DefaultDir returns the platform data directory.
+// DefaultDir returns the platform data directory. WEEKTODO_DATA_DIR overrides it.
 func DefaultDir() string {
 	if value := strings.TrimSpace(os.Getenv("WEEKTODO_DATA_DIR")); value != "" {
 		return value
 	}
-	base, err := os.UserConfigDir()
-	if err != nil {
-		base = "."
+	return configDir()
+}
+
+// configDir returns ~/.config/weektodo on Unix and the per-user application
+// data directory on Windows.
+func configDir() string {
+	if runtime.GOOS == "windows" {
+		if base, err := os.UserConfigDir(); err == nil {
+			return filepath.Join(base, "weektodo")
+		}
+		return "weektodo"
 	}
-	return filepath.Join(base, "WeekTodo")
+	if base := strings.TrimSpace(os.Getenv("XDG_CONFIG_HOME")); base != "" {
+		return filepath.Join(base, "weektodo")
+	}
+	if home, err := os.UserHomeDir(); err == nil {
+		return filepath.Join(home, ".config", "weektodo")
+	}
+	if base, err := os.UserConfigDir(); err == nil {
+		return filepath.Join(base, "weektodo")
+	}
+	return "weektodo"
 }
 
 // New opens or creates the store in dir.
 func New(dir string) (*Store, error) {
 	if strings.TrimSpace(dir) == "" {
 		dir = DefaultDir()
+		if samePath(dir, configDir()) {
+			if err := migrateLegacy(dir); err != nil {
+				return nil, err
+			}
+		}
 	}
 	if err := os.MkdirAll(dir, 0o700); err != nil {
 		return nil, fmt.Errorf("create data directory: %w", err)
@@ -59,6 +83,84 @@ func New(dir string) (*Store, error) {
 		return nil, err
 	}
 	return s, nil
+}
+
+// legacyDirs lists directories used by earlier versions.
+func legacyDirs() []string {
+	dirs := []string{}
+	if base, err := os.UserConfigDir(); err == nil {
+		dirs = append(dirs, filepath.Join(base, "WeekTodo"))
+	}
+	if home, err := os.UserHomeDir(); err == nil {
+		dirs = append(dirs, filepath.Join(home, ".weektodo-dev"), filepath.Join(home, ".weektodo"))
+	}
+	return dirs
+}
+
+func samePath(a, b string) bool {
+	absA, errA := filepath.Abs(a)
+	absB, errB := filepath.Abs(b)
+	return errA == nil && errB == nil && absA == absB
+}
+
+// migrateLegacy copies data from a previous default directory the first time
+// the new directory is used. Old files are kept so nothing is lost if the
+// migration is interrupted.
+func migrateLegacy(target string) error {
+	if _, err := os.Stat(filepath.Join(target, dataFileName)); err == nil {
+		return nil
+	}
+	for _, legacy := range legacyDirs() {
+		if samePath(legacy, target) {
+			continue
+		}
+		if _, err := os.Stat(filepath.Join(legacy, dataFileName)); err != nil {
+			continue
+		}
+		if err := copyLegacyDir(legacy, target); err != nil {
+			return fmt.Errorf("migrate data from %s: %w", legacy, err)
+		}
+		return nil
+	}
+	return nil
+}
+
+func copyLegacyDir(src, dst string) error {
+	for _, name := range []string{dataFileName, settingsFileName} {
+		if err := copyFileIfMissing(filepath.Join(src, name), filepath.Join(dst, name)); err != nil {
+			return err
+		}
+	}
+	backups := filepath.Join(src, backupDirName)
+	return filepath.WalkDir(backups, func(path string, entry fs.DirEntry, err error) error {
+		if err != nil {
+			if errors.Is(err, fs.ErrNotExist) {
+				return nil
+			}
+			return err
+		}
+		if entry.IsDir() {
+			return nil
+		}
+		rel, err := filepath.Rel(src, path)
+		if err != nil {
+			return err
+		}
+		return copyFileIfMissing(path, filepath.Join(dst, rel))
+	})
+}
+
+func copyFileIfMissing(src, dst string) error {
+	if _, err := os.Stat(dst); err == nil {
+		return nil
+	} else if !errors.Is(err, os.ErrNotExist) {
+		return err
+	}
+	data, err := os.ReadFile(src)
+	if err != nil {
+		return err
+	}
+	return writeAtomic(dst, data)
 }
 
 // Dir returns the store directory.

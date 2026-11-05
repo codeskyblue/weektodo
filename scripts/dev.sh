@@ -9,6 +9,7 @@ DEV_BIN="${ROOT}/bin/weektodo-dev"
 BACKEND_LOG="${TMPDIR:-/tmp}/weektodo-dev-backend.log"
 BACKEND_PID=""
 WATCH_PID=""
+DATA_DIR="${WEEKTODO_DATA_DIR:-${XDG_CONFIG_HOME:-$HOME/.config}/weektodo}"
 
 cleanup() {
 	if [[ -n "${WATCH_PID}" ]] && kill -0 "${WATCH_PID}" 2>/dev/null; then
@@ -59,8 +60,12 @@ build_backend() {
 }
 
 start_backend() {
-	WEEKTODO_DATA_DIR="${WEEKTODO_DATA_DIR:-$HOME/.weektodo-dev}" \
+	if [[ -n "${WEEKTODO_DATA_DIR:-}" ]]; then
+		WEEKTODO_DATA_DIR="${WEEKTODO_DATA_DIR}" \
+			"${DEV_BIN}" -listen "127.0.0.1:${BACKEND_PORT}" >>"${BACKEND_LOG}" 2>&1 &
+	else
 		"${DEV_BIN}" -listen "127.0.0.1:${BACKEND_PORT}" >>"${BACKEND_LOG}" 2>&1 &
+	fi
 	BACKEND_PID=$!
 	for _ in $(seq 1 40); do
 		if curl -fsS "${BACKEND_URL}/api/health" >/dev/null 2>&1; then
@@ -116,7 +121,7 @@ echo ""
 echo "WeekTodo dev"
 echo "  Backend:  ${BACKEND_URL}  (watching Go files)"
 echo "  Frontend: http://localhost:${FRONTEND_PORT}"
-echo "  Data dir: ${WEEKTODO_DATA_DIR:-$HOME/.weektodo-dev}"
+echo "  Data dir: ${DATA_DIR}"
 echo "  Log:      ${BACKEND_LOG}"
 echo ""
 

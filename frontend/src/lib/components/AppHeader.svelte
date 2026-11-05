@@ -8,7 +8,7 @@
 	import Sun from '@lucide/svelte/icons/sun';
 	import { setMode, userPrefersMode } from 'mode-watcher';
 	import { app } from '#lib/app.svelte';
-	import { t } from '#lib/i18n.svelte';
+	import { i18n, t } from '#lib/i18n.svelte';
 	import { formatRange, formatWeekTitle } from '#lib/date';
 	import Logo from './Logo.svelte';
 	import { Button } from '#lib/components/ui/button/index.js';
@@ -104,6 +104,15 @@
 					title={t('设置')}
 				>
 					<Settings />
+				</Button>
+				<Button
+					variant="ghost"
+					size="icon-sm"
+					onclick={() => app.setLanguage(i18n.language === 'zh' ? 'en' : 'zh')}
+					title={t('切换语言')}
+					aria-label={t('切换语言')}
+				>
+					<span class="text-[15px] font-semibold leading-none">文</span>
 				</Button>
 				<DropdownMenu.Root>
 					<DropdownMenu.Trigger>

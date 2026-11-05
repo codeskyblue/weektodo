@@ -56,6 +56,7 @@ const en: Record<string, string> = {
 	'数据以 JSON 保存，每天首次保存时会自动备份，保留 14 天。':
 		'Data is saved as JSON, with a daily backup on first save, kept for 14 days.',
 	'语言': 'Language',
+	'切换语言': 'Switch language',
 	'界面语言': 'Interface language',
 	'简体中文': 'Chinese (Simplified)',
 	'English': 'English',
