@@ -23,11 +23,11 @@ import (
 )
 
 const (
-	defaultAPIURL       = "https://api.github.com/repos/uiautodev/weektodo/releases/latest"
-	defaultManifestURL  = "https://github.com/uiautodev/weektodo/releases/latest/download/update.json"
-	defaultLatestURL    = "https://github.com/uiautodev/weektodo/releases/latest"
-	defaultFeedURL      = "https://github.com/uiautodev/weektodo/releases.atom"
-	defaultDownloadURL  = "https://github.com/uiautodev/weektodo/releases/download"
+	defaultAPIURL       = "https://api.github.com/repos/codeskyblue/weektodo/releases/latest"
+	defaultManifestURL  = "https://github.com/codeskyblue/weektodo/releases/latest/download/update.json"
+	defaultLatestURL    = "https://github.com/codeskyblue/weektodo/releases/latest"
+	defaultFeedURL      = "https://github.com/codeskyblue/weektodo/releases.atom"
+	defaultDownloadURL  = "https://github.com/codeskyblue/weektodo/releases/download"
 	defaultMirrorURL    = "https://gh-proxy.org/"
 	checksumAsset       = "SHA256SUMS"
 	checkAttemptTimeout = 20 * time.Second
