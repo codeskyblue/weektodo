@@ -54,6 +54,7 @@ export interface WebDAVPublic {
 	url: string;
 	username: string;
 	remoteDir: string;
+	autoSync: boolean;
 	hasPassword: boolean;
 	passwordHint: string;
 }

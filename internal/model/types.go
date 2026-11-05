@@ -57,6 +57,7 @@ type WebDAVConfig struct {
 	Username  string `json:"username"`
 	Password  string `json:"password"`
 	RemoteDir string `json:"remoteDir"`
+	AutoSync  bool   `json:"autoSync,omitempty"`
 }
 
 // Settings is stored separately from task data.

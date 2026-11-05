@@ -208,6 +208,10 @@ const en: Record<string, string> = {
 		'Sync merges tasks by update time; newer edits win.',
 	'立即同步': 'Sync now',
 	'同步中…': 'Syncing…',
+	'自动同步': 'Auto sync',
+	'保存后自动同步，并每 5 分钟检查远端变化。':
+		'Sync after saving and check for remote changes every 5 minutes.',
+	'自动同步失败': 'Auto sync failed',
 	'WebDAV 连接成功': 'WebDAV connection successful',
 	'WebDAV 连接失败': 'WebDAV connection failed',
 	'同步完成：{weeks} 周 / {tasks} 个任务': 'Sync complete · weeks: {weeks} / tasks: {tasks}',

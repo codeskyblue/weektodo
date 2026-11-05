@@ -84,6 +84,7 @@ func TestWebDAVSettingsAreRedacted(t *testing.T) {
 			"username":  "alice",
 			"password":  "secret-token",
 			"remoteDir": "/weektodo/",
+			"autoSync":  true,
 		},
 	})
 	if status != http.StatusOK {
@@ -102,6 +103,7 @@ func TestWebDAVSettingsAreRedacted(t *testing.T) {
 		webdav["username"] != "alice" ||
 		webdav["remoteDir"] != "/weektodo" ||
 		webdav["hasPassword"] != true ||
+		webdav["autoSync"] != true ||
 		webdav["passwordHint"] != "••••oken" {
 		t.Fatalf("webdav = %+v", webdav)
 	}
@@ -114,7 +116,7 @@ func TestWebDAVSettingsAreRedacted(t *testing.T) {
 		t.Fatalf("save webdav again: %d %s", status, raw)
 	}
 	webdav = decodeMap(t, raw)["webdav"].(map[string]any)
-	if webdav["username"] != "bob" || webdav["hasPassword"] != true {
+	if webdav["username"] != "bob" || webdav["hasPassword"] != true || webdav["autoSync"] != true {
 		t.Fatalf("webdav after keep = %+v", webdav)
 	}
 

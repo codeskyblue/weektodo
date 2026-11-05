@@ -115,6 +115,11 @@ class AppState {
 	private focusSeq = 0;
 	private loadSeq = 0;
 	private wailsBound = false;
+	private autoSyncTimer: ReturnType<typeof setTimeout> | null = null;
+	private autoSyncInterval: ReturnType<typeof setInterval> | null = null;
+	private autoSyncInFlight = false;
+	private autoSyncQueued = false;
+	private autoSyncErrorShown = false;
 
 	get week(): Week | null {
 		return this.weeks.find((week) => week.id === this.anchorId) ?? null;
@@ -204,6 +209,8 @@ class AppState {
 		} finally {
 			this.loading = false;
 		}
+		this.refreshAutoSync();
+		if (this.settings?.webdav.autoSync) this.scheduleAutoSync(1500);
 	}
 
 	private startClock(): void {
@@ -214,6 +221,23 @@ class AppState {
 			this.today = next;
 			this.currentWeekId = weekIdFor(next);
 		}, 30_000);
+	}
+
+	private async refreshWindow(): Promise<void> {
+		const anchorId = this.anchorId;
+		if (!anchorId) return;
+		const token = ++this.loadSeq;
+		try {
+			const weeks = await Promise.all(
+				this.windowIds(anchorId).map(async (id) => {
+					return (await api.getWeekOrNull(id)) ?? placeholderWeek(id);
+				})
+			);
+			if (token !== this.loadSeq) return;
+			this.weeks = weeks;
+		} catch {
+			// A background refresh should never disturb the current view.
+		}
 	}
 
 	async loadWindow(anchorId: string): Promise<void> {
@@ -334,6 +358,7 @@ class AppState {
 			this.saveError = '';
 		}
 		emitWails('weektodo:changed');
+		this.scheduleAutoSync();
 		if (this.dirtyWeeks.size > 0) void this.flushSave();
 	}
 
@@ -714,6 +739,9 @@ class AppState {
 	async saveSettings(draft: api.SettingsDraft): Promise<boolean> {
 		try {
 			this.settings = await api.saveSettings(draft);
+			this.autoSyncErrorShown = false;
+			this.refreshAutoSync();
+			if (this.settings?.webdav.autoSync) this.scheduleAutoSync(1500);
 			toast.success(t('设置已保存'));
 			return true;
 		} catch (error) {
@@ -751,6 +779,7 @@ class AppState {
 		await this.flushSave();
 		try {
 			const result = await api.syncWebDAV(draft);
+			this.autoSyncErrorShown = false;
 			toast.success(
 				t('同步完成：{weeks} 周 / {tasks} 个任务', {
 					weeks: result.weeks,
@@ -758,12 +787,84 @@ class AppState {
 				})
 			);
 			if (weekID) {
-				await this.loadWindow(weekID);
+				await this.refreshWindow();
 			}
 			return result;
 		} catch (error) {
 			toast.error(t('同步失败'), { description: messageOf(error) });
 			return null;
+		}
+	}
+
+	private refreshAutoSync(): void {
+		if (!this.settings?.webdav.autoSync) {
+			if (this.autoSyncInterval) {
+				clearInterval(this.autoSyncInterval);
+				this.autoSyncInterval = null;
+			}
+			if (this.autoSyncTimer) {
+				clearTimeout(this.autoSyncTimer);
+				this.autoSyncTimer = null;
+			}
+			return;
+		}
+		if (!this.autoSyncInterval) {
+			this.autoSyncInterval = setInterval(() => void this.autoSync(), 5 * 60_000);
+		}
+	}
+
+	private scheduleAutoSync(delay = 8000): void {
+		if (!this.settings?.webdav.autoSync) return;
+		if (this.autoSyncTimer) clearTimeout(this.autoSyncTimer);
+		this.autoSyncTimer = setTimeout(() => {
+			this.autoSyncTimer = null;
+			void this.autoSync();
+		}, delay);
+	}
+
+	private async autoSync(): Promise<void> {
+		if (!this.settings?.webdav.autoSync || !this.settings.webdav.url) return;
+		if (this.autoSyncTimer) {
+			clearTimeout(this.autoSyncTimer);
+			this.autoSyncTimer = null;
+		}
+		if (this.autoSyncInFlight) {
+			this.autoSyncQueued = true;
+			return;
+		}
+		if (this.loading || this.navigating || this.reportOpen || this.confirm.open) return;
+		await this.flushSave();
+		await this.waitForSave();
+		if (this.saving || this.dirtyWeeks.size > 0) {
+			this.autoSyncQueued = true;
+			return;
+		}
+		const revision = this.revision;
+		this.autoSyncInFlight = true;
+		try {
+			await api.syncWebDAV({
+				url: this.settings.webdav.url,
+				username: this.settings.webdav.username,
+				password: '',
+				remoteDir: this.settings.webdav.remoteDir
+			});
+			this.autoSyncErrorShown = false;
+			if (revision === this.revision) {
+				await this.refreshWindow();
+			} else {
+				this.autoSyncQueued = true;
+			}
+		} catch (error) {
+			if (!this.autoSyncErrorShown) {
+				this.autoSyncErrorShown = true;
+				toast.error(t('自动同步失败'), { description: messageOf(error) });
+			}
+		} finally {
+			this.autoSyncInFlight = false;
+			if (this.autoSyncQueued) {
+				this.autoSyncQueued = false;
+				this.scheduleAutoSync(2000);
+			}
 		}
 	}
 

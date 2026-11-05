@@ -19,6 +19,7 @@
 	import type { UpdateInfo, UpdateProgress } from '#lib/types';
 	import { Badge } from '#lib/components/ui/badge/index.js';
 	import { Button } from '#lib/components/ui/button/index.js';
+	import { Checkbox } from '#lib/components/ui/checkbox/index.js';
 	import * as Dialog from '#lib/components/ui/dialog/index.js';
 	import { Input } from '#lib/components/ui/input/index.js';
 	import { Label } from '#lib/components/ui/label/index.js';
@@ -45,6 +46,7 @@
 	let davPassword = $state('');
 	let davPasswordInput = $state<HTMLInputElement | null>(null);
 	let clearDavPassword = $state(false);
+	let davAutoSync = $state(app.settings?.webdav.autoSync ?? false);
 	let davTesting = $state(false);
 	let davSyncing = $state(false);
 
@@ -255,7 +257,7 @@
 		saving = true;
 		const ok = await app.saveSettings({
 			ai: { baseUrl, model, apiKey, clearApiKey },
-			webdav: { ...davDraft(), clearPassword: clearDavPassword }
+			webdav: { ...davDraft(), clearPassword: clearDavPassword, autoSync: davAutoSync }
 		});
 		saving = false;
 		if (ok) {
@@ -523,6 +525,21 @@
 					<p class="text-xs text-muted-foreground">
 						{t('相对于 WebDAV 地址，开头的 / 可省略；留空时同步到地址根目录。')}
 					</p>
+				</div>
+
+				<div class="flex items-start gap-2 rounded-lg border p-3">
+					<Checkbox
+						id="dav-auto-sync"
+						class="mt-0.5"
+						checked={davAutoSync}
+						onCheckedChange={(value) => (davAutoSync = value === true)}
+					/>
+					<div class="min-w-0">
+						<div class="text-sm">{t('自动同步')}</div>
+						<p class="mt-0.5 text-xs text-muted-foreground">
+							{t('保存后自动同步，并每 5 分钟检查远端变化。')}
+						</p>
+					</div>
 				</div>
 
 				<div class="flex flex-wrap items-center gap-2">

@@ -35,6 +35,7 @@ func (s *Server) handleSaveSettings(w http.ResponseWriter, r *http.Request) {
 			Username      *string `json:"username"`
 			Password      *string `json:"password"`
 			RemoteDir     *string `json:"remoteDir"`
+			AutoSync      *bool   `json:"autoSync"`
 			ClearPassword bool    `json:"clearPassword"`
 		} `json:"webdav"`
 		WeekSpan *int    `json:"weekSpan"`
@@ -64,6 +65,9 @@ func (s *Server) handleSaveSettings(w http.ResponseWriter, r *http.Request) {
 	}
 	if body.WebDAV.RemoteDir != nil {
 		current.WebDAV.RemoteDir = *body.WebDAV.RemoteDir
+	}
+	if body.WebDAV.AutoSync != nil {
+		current.WebDAV.AutoSync = *body.WebDAV.AutoSync
 	}
 	if body.WebDAV.ClearPassword {
 		current.WebDAV.Password = ""
@@ -201,6 +205,7 @@ func publicWebDAV(cfg model.WebDAVConfig) map[string]any {
 		"url":          cfg.URL,
 		"username":     cfg.Username,
 		"remoteDir":    cfg.RemoteDir,
+		"autoSync":     cfg.AutoSync,
 		"hasPassword":  strings.TrimSpace(cfg.Password) != "",
 		"passwordHint": keyHint(cfg.Password),
 	}

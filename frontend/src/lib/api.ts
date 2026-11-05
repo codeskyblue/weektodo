@@ -135,7 +135,7 @@ export interface WebDAVDraft {
 
 export interface SettingsDraft {
 	ai?: AIDraft;
-	webdav?: WebDAVDraft & { clearPassword?: boolean };
+	webdav?: WebDAVDraft & { clearPassword?: boolean; autoSync?: boolean };
 }
 
 export interface WebDAVSyncResult {
