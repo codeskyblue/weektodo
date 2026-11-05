@@ -145,8 +145,9 @@ make desktop
 ```
 
 构建脚本分别编译 `amd64` 和 `arm64`，用 `lipo` 合并，复制 `Info.plist` 和
-`AppIcon.icns`，最后 ad-hoc 签名。应用使用常规激活策略，因此会同时出现在
-Dock、Cmd+Tab 和菜单栏；关闭窗口后仍常驻菜单栏。
+`AppIcon.icns`，最后 ad-hoc 签名。应用打开窗口时使用常规激活策略，出现在
+Dock、Cmd+Tab 和菜单栏；关闭窗口后切换为 Accessory，从 Dock/Cmd+Tab 移除，
+仅保留菜单栏图标。点击菜单栏图标会恢复 Regular 模式。
 
 托盘图标和菜单栏数字由 `desktop/main.go` 维护：
 

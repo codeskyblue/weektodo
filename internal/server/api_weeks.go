@@ -127,7 +127,8 @@ func (s *Server) handleReport(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusNotFound, "not_found", "这一周还没有记录")
 		return
 	}
-	markdown, stats := todo.BuildReport(week, mode)
+	lang := requestLanguage(r, s.store.Settings().Language)
+	markdown, stats := todo.BuildReport(week, mode, lang)
 	writeJSON(w, http.StatusOK, map[string]any{
 		"markdown": markdown,
 		"stats":    stats,
@@ -142,26 +143,32 @@ func (s *Server) handlePolish(w http.ResponseWriter, r *http.Request) {
 	}
 	var body struct {
 		Mode string `json:"mode"`
+		Lang string `json:"lang"`
 	}
 	_ = decodeJSON(w, r, &body)
 	mode := body.Mode
 	if mode != "full" {
 		mode = "brief"
 	}
+	fallbackLang := body.Lang
+	if fallbackLang == "" {
+		fallbackLang = s.store.Settings().Language
+	}
+	lang := requestLanguage(r, fallbackLang)
 	week, ok := s.store.Week(id)
 	if !ok {
 		writeError(w, http.StatusNotFound, "not_found", "这一周还没有记录")
 		return
 	}
 	cfg := s.store.Settings().AI
-	if err := ai.ValidateConfig(cfg); err != nil {
+	if err := ai.ValidateConfig(cfg, lang); err != nil {
 		writeError(w, http.StatusBadRequest, "ai_not_configured", err.Error())
 		return
 	}
-	report, _ := todo.BuildReport(week, mode)
+	report, _ := todo.BuildReport(week, mode, lang)
 	ctx, cancel := context.WithTimeout(r.Context(), 100*time.Second)
 	defer cancel()
-	markdown, err := s.ai.Polish(ctx, cfg, week, report)
+	markdown, err := s.ai.Polish(ctx, cfg, week, report, lang)
 	if err != nil {
 		writeError(w, http.StatusBadGateway, "ai_failed", err.Error())
 		return

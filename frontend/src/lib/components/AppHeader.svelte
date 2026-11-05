@@ -8,6 +8,7 @@
 	import Sun from '@lucide/svelte/icons/sun';
 	import { setMode, userPrefersMode } from 'mode-watcher';
 	import { app } from '#lib/app.svelte';
+	import { t } from '#lib/i18n.svelte';
 	import { formatRange, formatWeekTitle } from '#lib/date';
 	import Logo from './Logo.svelte';
 	import { Button } from '#lib/components/ui/button/index.js';
@@ -30,8 +31,8 @@
 				type="button"
 				class="flex min-w-0 items-center gap-2.5 rounded-md outline-none focus-visible:ring-2 focus-visible:ring-ring"
 				onclick={() => app.goToday()}
-				aria-label="WeekTodo 首页"
-				title="回到本周"
+				aria-label={t('WeekTodo 首页')}
+				title={t('回到本周')}
 			>
 				<Logo size={30} />
 				<span class="hidden text-[15px] font-semibold tracking-tight sm:block">WeekTodo</span>
@@ -43,7 +44,7 @@
 					size="icon-sm"
 					onclick={previous}
 					disabled={app.navigating || !app.week}
-					title="上一周"
+					title={t('上一周')}
 				>
 					<ChevronLeft />
 				</Button>
@@ -54,7 +55,7 @@
 							{formatRange(app.week.start, app.week.end)}
 						</div>
 					{:else}
-						<div class="text-sm text-muted-foreground">加载中…</div>
+						<div class="text-sm text-muted-foreground">{t('加载中…')}</div>
 					{/if}
 				</div>
 				<Button
@@ -62,13 +63,13 @@
 					size="icon-sm"
 					onclick={next}
 					disabled={app.navigating || !app.week}
-					title="下一周"
+					title={t('下一周')}
 				>
 					<ChevronRight />
 				</Button>
 				{#if app.week && !app.isCurrentWeek}
 					<Button variant="outline" size="xs" class="ml-1" onclick={() => app.goToday()}>
-						回到本周
+						{t('回到本周')}
 					</Button>
 				{/if}
 			</div>
@@ -76,7 +77,7 @@
 			<div class="ml-auto flex items-center gap-1.5">
 				<div class="mr-1 hidden items-center gap-2 sm:flex">
 					{#if app.saveStatus === 'saving'}
-						<span class="text-xs text-muted-foreground">保存中…</span>
+						<span class="text-xs text-muted-foreground">{t('保存中…')}</span>
 					{:else if app.saveStatus === 'error'}
 						<button
 							type="button"
@@ -84,7 +85,7 @@
 							onclick={() => app.retrySave()}
 							title={app.saveError}
 						>
-							保存失败，重试
+							{t('保存失败，重试')}
 						</button>
 					{/if}
 					<span class="text-xs tabular-nums text-muted-foreground">
@@ -94,20 +95,20 @@
 				</div>
 				<Button variant="outline" size="sm" onclick={() => app.openReport()}>
 					<FileText />
-					<span class="hidden sm:inline">周报</span>
+					<span class="hidden sm:inline">{t('周报')}</span>
 				</Button>
 				<Button
 					variant="ghost"
 					size="icon-sm"
 					onclick={() => (app.settingsOpen = true)}
-					title="设置"
+					title={t('设置')}
 				>
 					<Settings />
 				</Button>
 				<DropdownMenu.Root>
 					<DropdownMenu.Trigger>
 						{#snippet child({ props })}
-							<Button variant="ghost" size="icon-sm" title="切换主题" {...props}>
+							<Button variant="ghost" size="icon-sm" title={t('切换主题')} {...props}>
 								{#if userPrefersMode.current === 'dark'}
 									<Moon />
 								{:else if userPrefersMode.current === 'light'}
@@ -120,13 +121,13 @@
 					</DropdownMenu.Trigger>
 					<DropdownMenu.Content align="end" class="w-36">
 						<DropdownMenu.Item onSelect={() => setMode('light')}>
-							<Sun class="size-4" /> 浅色
+							<Sun class="size-4" /> {t('浅色')}
 						</DropdownMenu.Item>
 						<DropdownMenu.Item onSelect={() => setMode('dark')}>
-							<Moon class="size-4" /> 深色
+							<Moon class="size-4" /> {t('深色')}
 						</DropdownMenu.Item>
 						<DropdownMenu.Item onSelect={() => setMode('system')}>
-							<Monitor class="size-4" /> 跟随系统
+							<Monitor class="size-4" /> {t('跟随系统')}
 						</DropdownMenu.Item>
 					</DropdownMenu.Content>
 				</DropdownMenu.Root>

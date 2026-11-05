@@ -3,6 +3,7 @@
 	import Inbox from '@lucide/svelte/icons/inbox';
 	import ListTodo from '@lucide/svelte/icons/list-todo';
 	import { app } from '#lib/app.svelte';
+	import { t } from '#lib/i18n.svelte';
 	import { Button } from '#lib/components/ui/button/index.js';
 	import { Card, CardContent } from '#lib/components/ui/card/index.js';
 
@@ -15,10 +16,10 @@
 			<Inbox class="size-5" />
 		</div>
 		<div>
-			<div class="text-sm font-medium">没有符合筛选的任务</div>
-			<div class="mt-1 text-xs text-muted-foreground">换个筛选条件看看。</div>
+			<div class="text-sm font-medium">{t('没有符合筛选的任务')}</div>
+			<div class="mt-1 text-xs text-muted-foreground">{t('换个筛选条件看看。')}</div>
 		</div>
-		<Button variant="outline" size="sm" onclick={() => (app.filter = 'all')}>查看全部</Button>
+		<Button variant="outline" size="sm" onclick={() => (app.filter = 'all')}>{t('查看全部')}</Button>
 	</div>
 {:else}
 	<Card class="border-dashed shadow-none">
@@ -27,14 +28,14 @@
 				<ListTodo class="size-5" />
 			</div>
 			<div>
-				<div class="text-sm font-medium">这一周还没有任务</div>
+				<div class="text-sm font-medium">{t('这一周还没有任务')}</div>
 				<div class="mt-1 text-xs text-muted-foreground">
-					从一条小任务开始，或者把上周没做完的带过来。
+					{t('从一条小任务开始，或者把上周没做完的带过来。')}
 				</div>
 			</div>
 			<div class="flex flex-wrap items-center justify-center gap-2">
 				<Button size="sm" onclick={() => app.addTask()}>
-					<CalendarPlus /> 添加第一条
+					<CalendarPlus /> {t('添加第一条')}
 				</Button>
 				<Button
 					variant="outline"
@@ -42,7 +43,7 @@
 					disabled={app.carryBusy}
 					onclick={() => app.openCarryOver()}
 				>
-					<Inbox /> 带入上周未完成
+					<Inbox /> {t('带入上周未完成')}
 				</Button>
 			</div>
 		</CardContent>

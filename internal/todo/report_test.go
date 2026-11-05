@@ -5,6 +5,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/uiautodev/weektodo/internal/i18n"
 	"github.com/uiautodev/weektodo/internal/model"
 )
 
@@ -31,7 +32,7 @@ func reportFixture(t *testing.T) *model.Week {
 
 func TestBuildBriefReport(t *testing.T) {
 	week := reportFixture(t)
-	markdown, stats := BuildReport(week, "brief")
+	markdown, stats := BuildReport(week, "brief", i18n.Zh)
 	if stats.Done != 3 || stats.Total != 4 || stats.Dropped != 1 {
 		t.Fatalf("stats = %+v", stats)
 	}
@@ -54,7 +55,7 @@ func TestBuildBriefReport(t *testing.T) {
 
 func TestBuildFullReport(t *testing.T) {
 	week := reportFixture(t)
-	markdown, _ := BuildReport(week, "full")
+	markdown, _ := BuildReport(week, "full", i18n.Zh)
 	for _, want := range []string{
 		"- 重构登录页",
 		"  - 拆分组件",
@@ -72,7 +73,7 @@ func TestReportEmptyWeek(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	markdown, _ := BuildReport(week, "brief")
+	markdown, _ := BuildReport(week, "brief", i18n.Zh)
 	if !strings.Contains(markdown, "本周还没有任务") {
 		t.Fatalf("unexpected report:\n%s", markdown)
 	}
@@ -85,5 +86,25 @@ func TestNewWeek(t *testing.T) {
 	}
 	if week.Start != "2026-11-02" || week.End != "2026-11-08" || week.Tasks == nil {
 		t.Fatalf("week = %+v", week)
+	}
+}
+
+func TestBuildEnglishReport(t *testing.T) {
+	week := reportFixture(t)
+	markdown, stats := BuildReport(week, "brief", i18n.En)
+	if stats.Done != 3 {
+		t.Fatalf("stats = %+v", stats)
+	}
+	for _, want := range []string{
+		"# Weekly Report | 2026-11-02 ~ 2026-11-08",
+		"Completed 3, dropped 1, open 1 this week.",
+		"## Tue · Nov 3",
+		"- 写文档",
+		"## Wed · Nov 4",
+		"- 重构登录页 (2 subtasks)",
+	} {
+		if !strings.Contains(markdown, want) {
+			t.Fatalf("report missing %q:\n%s", want, markdown)
+		}
 	}
 }

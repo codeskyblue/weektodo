@@ -8,6 +8,7 @@
 	import RotateCcw from '@lucide/svelte/icons/rotate-ccw';
 	import Trash2 from '@lucide/svelte/icons/trash-2';
 	import { app } from '#lib/app.svelte';
+	import { t } from '#lib/i18n.svelte';
 	import { isIndeterminate } from '#lib/tree';
 	import type { TaskRow } from '#lib/types';
 	import { Checkbox } from '#lib/components/ui/checkbox/index.js';
@@ -110,7 +111,7 @@
 			{indeterminate}
 			disabled={dropped}
 			onCheckedChange={() => app.toggleTask(task.id)}
-			aria-label={done ? `取消完成 ${task.text || '任务'}` : `完成 ${task.text || '任务'}`}
+			aria-label={done ? t('取消完成 {title}', { title: task.text || t('任务') }) : t('完成 {title}', { title: task.text || t('任务') })}
 		/>
 	</div>
 
@@ -119,7 +120,7 @@
 			{#if task.carriedFrom}
 				<ArrowDownToLine
 					class="size-3.5 shrink-0 text-muted-foreground/70"
-					aria-label="从上一周带入"
+					aria-label={t('从上一周带入')}
 				/>
 			{/if}
 			<input
@@ -131,7 +132,7 @@
 				maxlength="500"
 				autocomplete="off"
 				spellcheck="false"
-				placeholder="写点什么…"
+				placeholder={t('写点什么…')}
 				class="h-7 min-w-0 flex-1 rounded-md border-0 bg-transparent px-1 text-sm outline-none placeholder:text-muted-foreground/50 focus:bg-background/70 focus:ring-0 {done
 					? 'text-muted-foreground line-through decoration-muted-foreground/50'
 					: ''} {dropped
@@ -142,7 +143,7 @@
 				<span
 					class="shrink-0 rounded-full border border-destructive/20 bg-destructive/10 px-1.5 py-0.5 text-[10px] leading-none text-destructive"
 				>
-					已废弃
+					{t('已废弃')}
 				</span>
 			{/if}
 			{#if task.children.length > 0}
@@ -163,7 +164,7 @@
 								{...props}
 								variant="ghost"
 								size="icon-xs"
-								title="任务操作"
+								title={t('任务操作')}
 								class="text-muted-foreground"
 							>
 								<MoreHorizontal />
@@ -175,29 +176,29 @@
 							disabled={dropped}
 							onSelect={() => app.addChild(task.id)}
 						>
-							<Plus class="size-4" /> 添加子任务
+							<Plus class="size-4" /> {t('添加子任务')}
 						</DropdownMenu.Item>
 						<DropdownMenu.Item onSelect={() => app.move(task.id, -1)}>
-							<ArrowUp class="size-4" /> 上移
+							<ArrowUp class="size-4" /> {t('上移')}
 						</DropdownMenu.Item>
 						<DropdownMenu.Item onSelect={() => app.move(task.id, 1)}>
-							<ArrowDown class="size-4" /> 下移
+							<ArrowDown class="size-4" /> {t('下移')}
 						</DropdownMenu.Item>
 						<DropdownMenu.Separator />
 						{#if dropped}
 							<DropdownMenu.Item onSelect={() => app.restoreTask(task.id)}>
-								<RotateCcw class="size-4" /> 恢复任务
+								<RotateCcw class="size-4" /> {t('恢复任务')}
 							</DropdownMenu.Item>
 						{:else}
 							<DropdownMenu.Item onSelect={() => app.dropTask(task.id)}>
-								<Ban class="size-4" /> 废弃任务
+								<Ban class="size-4" /> {t('废弃任务')}
 							</DropdownMenu.Item>
 						{/if}
 						<DropdownMenu.Item
 							variant="destructive"
 							onSelect={() => app.deleteTask(task.id)}
 						>
-							<Trash2 class="size-4" /> 删除任务
+							<Trash2 class="size-4" /> {t('删除任务')}
 						</DropdownMenu.Item>
 					</DropdownMenu.Content>
 				</DropdownMenu.Root>

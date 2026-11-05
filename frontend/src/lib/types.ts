@@ -51,6 +51,7 @@ export interface AIPublic {
 
 export interface SettingsPublic {
 	ai: AIPublic;
+	language?: 'zh' | 'en';
 }
 
 export interface Meta {

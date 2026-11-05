@@ -1,4 +1,8 @@
-const WEEKDAYS = ['周日', '周一', '周二', '周三', '周四', '周五', '周六'];
+import { i18n, t } from './i18n.svelte';
+
+function locale(): string {
+	return i18n.language === 'en' ? 'en-US' : 'zh-CN';
+}
 
 export function pad(value: number): string {
 	return String(value).padStart(2, '0');
@@ -72,12 +76,11 @@ export function weekYear(id: string): number {
 }
 
 export function weekdayLabel(value: string): string {
-	return WEEKDAYS[parseISO(value).getDay()] ?? '';
+	return new Intl.DateTimeFormat(locale(), { weekday: 'short' }).format(parseISO(value));
 }
 
 export function monthDay(value: string): string {
-	const date = parseISO(value);
-	return `${date.getMonth() + 1}月${date.getDate()}日`;
+	return new Intl.DateTimeFormat(locale(), { month: 'short', day: 'numeric' }).format(parseISO(value));
 }
 
 export function formatRange(start: string, end: string): string {
@@ -85,7 +88,7 @@ export function formatRange(start: string, end: string): string {
 }
 
 export function formatWeekTitle(id: string): string {
-	return `${weekYear(id)} 第 ${weekNumber(id)} 周`;
+	return t('{year} 第 {week} 周', { year: weekYear(id), week: weekNumber(id) });
 }
 
 export function isSameWeek(id: string, date = new Date()): boolean {
@@ -95,7 +98,7 @@ export function isSameWeek(id: string, date = new Date()): boolean {
 export function daysOfWeek(start: string): { date: string; label: string; day: number }[] {
 	return Array.from({ length: 7 }, (_, index) => {
 		const date = addDays(start, index);
-		return { date, label: WEEKDAYS[(index + 1) % 7] ?? '', day: index + 1 };
+		return { date, label: weekdayLabel(date), day: index + 1 };
 	});
 }
 

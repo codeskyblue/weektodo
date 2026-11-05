@@ -7,11 +7,16 @@ import (
 	"time"
 
 	"github.com/uiautodev/weektodo/internal/ai"
+	"github.com/uiautodev/weektodo/internal/i18n"
 	"github.com/uiautodev/weektodo/internal/model"
 )
 
 func (s *Server) handleGetSettings(w http.ResponseWriter, _ *http.Request) {
-	writeJSON(w, http.StatusOK, map[string]any{"ai": publicAI(s.store.Settings().AI)})
+	settings := s.store.Settings()
+	writeJSON(w, http.StatusOK, map[string]any{
+		"ai":       publicAI(settings.AI),
+		"language": settings.Language,
+	})
 }
 
 func (s *Server) handleSaveSettings(w http.ResponseWriter, r *http.Request) {
@@ -22,6 +27,7 @@ func (s *Server) handleSaveSettings(w http.ResponseWriter, r *http.Request) {
 			APIKey      *string `json:"apiKey"`
 			ClearAPIKey bool    `json:"clearApiKey"`
 		} `json:"ai"`
+		Language *string `json:"language"`
 	}
 	if err := decodeJSON(w, r, &body); err != nil {
 		writeError(w, http.StatusBadRequest, "invalid_body", err.Error())
@@ -39,11 +45,20 @@ func (s *Server) handleSaveSettings(w http.ResponseWriter, r *http.Request) {
 	} else if body.AI.APIKey != nil && strings.TrimSpace(*body.AI.APIKey) != "" {
 		current.AI.APIKey = *body.AI.APIKey
 	}
+	if body.Language != nil {
+		if lang := i18n.Normalize(*body.Language); lang != "" {
+			current.Language = string(lang)
+		}
+	}
 	if err := s.store.UpdateSettings(current); err != nil {
 		writeError(w, http.StatusInternalServerError, "save_failed", err.Error())
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"ai": publicAI(s.store.Settings().AI)})
+	settings := s.store.Settings()
+	writeJSON(w, http.StatusOK, map[string]any{
+		"ai":       publicAI(settings.AI),
+		"language": settings.Language,
+	})
 }
 
 func (s *Server) handleAIModels(w http.ResponseWriter, r *http.Request) {
@@ -59,13 +74,14 @@ func (s *Server) handleAIModels(w http.ResponseWriter, r *http.Request) {
 	if body.APIKey != nil && strings.TrimSpace(*body.APIKey) != "" {
 		cfg.APIKey = *body.APIKey
 	}
-	if err := ai.ValidateEndpoint(cfg); err != nil {
+	lang := responseLanguage(w)
+	if err := ai.ValidateEndpoint(cfg, lang); err != nil {
 		writeError(w, http.StatusBadRequest, "ai_not_configured", err.Error())
 		return
 	}
 	ctx, cancel := context.WithTimeout(r.Context(), 30*time.Second)
 	defer cancel()
-	models, err := s.ai.Models(ctx, cfg)
+	models, err := s.ai.Models(ctx, cfg, lang)
 	if err != nil {
 		writeError(w, http.StatusBadGateway, "ai_failed", err.Error())
 		return
@@ -93,13 +109,14 @@ func (s *Server) handleTestAI(w http.ResponseWriter, r *http.Request) {
 	if body.APIKey != nil && strings.TrimSpace(*body.APIKey) != "" {
 		cfg.APIKey = *body.APIKey
 	}
-	if err := ai.ValidateConfig(cfg); err != nil {
+	lang := responseLanguage(w)
+	if err := ai.ValidateConfig(cfg, lang); err != nil {
 		writeError(w, http.StatusBadRequest, "ai_not_configured", err.Error())
 		return
 	}
 	ctx, cancel := context.WithTimeout(r.Context(), 30*time.Second)
 	defer cancel()
-	message, err := s.ai.Test(ctx, cfg)
+	message, err := s.ai.Test(ctx, cfg, lang)
 	if err != nil {
 		writeError(w, http.StatusBadGateway, "ai_failed", err.Error())
 		return

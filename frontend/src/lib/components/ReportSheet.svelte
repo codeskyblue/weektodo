@@ -9,6 +9,7 @@
 	import { marked } from 'marked';
 	import { toast } from 'svelte-sonner';
 	import { app } from '#lib/app.svelte';
+	import { t } from '#lib/i18n.svelte';
 	import { formatRange, formatWeekTitle } from '#lib/date';
 	import type { ReportMode } from '#lib/types';
 	import { Badge } from '#lib/components/ui/badge/index.js';
@@ -35,7 +36,7 @@
 			document.execCommand('copy');
 			area.remove();
 		}
-		toast.success('周报已复制');
+		toast.success(t('周报已复制'));
 	}
 
 	function downloadReport(): void {
@@ -45,7 +46,7 @@
 		const url = URL.createObjectURL(blob);
 		const anchor = document.createElement('a');
 		anchor.href = url;
-		anchor.download = `周报-${app.week.id}.md`;
+		anchor.download = t('周报-{id}.md', { id: app.week.id });
 		anchor.click();
 		URL.revokeObjectURL(url);
 	}
@@ -56,10 +57,10 @@
 		<div class="border-b px-5 py-4 pr-12">
 			<Sheet.Header class="gap-1 p-0">
 				<Sheet.Title class="flex items-center gap-2 text-base">
-					周报
+					{t('周报')}
 					{#if app.aiMarkdown}
 						<Badge variant="secondary" class="gap-1">
-							<Bot class="size-3" /> AI 润色
+							<Bot class="size-3" /> {t('AI 润色')}
 						</Badge>
 					{/if}
 				</Sheet.Title>
@@ -70,10 +71,10 @@
 				</Sheet.Description>
 			</Sheet.Header>
 			<div class="mt-3 flex flex-wrap items-center gap-1.5">
-				<Badge variant="outline">完成 {app.reportStats.done}</Badge>
-				<Badge variant="outline">废弃 {app.reportStats.dropped}</Badge>
+				<Badge variant="outline">{t('完成 {count}', { count: app.reportStats.done })}</Badge>
+				<Badge variant="outline">{t('废弃 {count}', { count: app.reportStats.dropped })}</Badge>
 				<Badge variant="outline">
-					未完成 {Math.max(0, app.reportStats.total - app.reportStats.done)}
+					{t('未完成 {count}', { count: Math.max(0, app.reportStats.total - app.reportStats.done) })}
 				</Badge>
 				<div class="ml-auto flex items-center gap-1">
 					<Button
@@ -81,7 +82,7 @@
 						size="icon-sm"
 						onclick={copyReport}
 						disabled={!app.reportText}
-						title="复制 Markdown"
+						title={t('复制 Markdown')}
 					>
 						<Copy />
 					</Button>
@@ -90,7 +91,7 @@
 						size="icon-sm"
 						onclick={downloadReport}
 						disabled={!app.reportText}
-						title="下载 Markdown"
+						title={t('下载 Markdown')}
 					>
 						<Download />
 					</Button>
@@ -104,14 +105,14 @@
 				onValueChange={(value) => app.setReportMode(value as ReportMode)}
 			>
 				<Tabs.List>
-					<Tabs.Trigger value="brief">精简</Tabs.Trigger>
-					<Tabs.Trigger value="full">完整</Tabs.Trigger>
+					<Tabs.Trigger value="brief">{t('精简')}</Tabs.Trigger>
+					<Tabs.Trigger value="full">{t('完整')}</Tabs.Trigger>
 				</Tabs.List>
 			</Tabs.Root>
 			<div class="flex items-center gap-1.5">
 				{#if app.aiMarkdown}
 					<Button variant="ghost" size="sm" onclick={() => app.clearAIReport()}>
-						<RotateCcw /> 恢复本地
+						<RotateCcw /> {t('恢复本地')}
 					</Button>
 				{/if}
 				<Button
@@ -121,9 +122,9 @@
 					disabled={app.aiLoading || app.reportLoading || !app.reportMarkdown}
 				>
 					{#if app.aiLoading}
-						<Loader2 class="animate-spin" /> 生成中…
+						<Loader2 class="animate-spin" /> {t('生成中…')}
 					{:else}
-						<Sparkles /> AI 润色
+						<Sparkles /> {t('AI 润色')}
 					{/if}
 				</Button>
 			</div>
@@ -147,12 +148,12 @@
 					{@html html}
 				</div>
 			{:else}
-				<p class="text-sm text-muted-foreground">本周还没有可以写进周报的内容。</p>
+				<p class="text-sm text-muted-foreground">{t('本周还没有可以写进周报的内容。')}</p>
 			{/if}
 			{#if app.aiMarkdown}
 				<Separator class="my-5" />
 				<p class="text-xs text-muted-foreground">
-					AI 生成的内容可能有偏差，发送前请检查。
+					{t('AI 生成的内容可能有偏差，发送前请检查。')}
 				</p>
 			{/if}
 		</div>

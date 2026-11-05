@@ -1,3 +1,4 @@
+import { i18n, t } from './i18n.svelte';
 import type {
 	CarryPreview,
 	CarryResult,
@@ -29,6 +30,7 @@ export class ApiError extends Error {
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
 	const headers = new Headers(init?.headers);
+	headers.set('Accept-Language', i18n.language);
 	if (init?.body && !headers.has('Content-Type')) {
 		headers.set('Content-Type', 'application/json');
 	}
@@ -44,7 +46,7 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 	}
 	if (!response.ok) {
 		const payload = parsed as { error?: string; code?: string } | null;
-		throw new ApiError(payload?.error || response.statusText || '请求失败', response.status, payload?.code || '');
+		throw new ApiError(payload?.error || response.statusText || t('请求失败'), response.status, payload?.code || '');
 	}
 	return parsed as T;
 }
@@ -77,13 +79,16 @@ export function carryOver(id: string): Promise<CarryResult> {
 }
 
 export function getReport(id: string, mode: ReportMode): Promise<ReportResponse> {
-	return request(`/weeks/${encodeURIComponent(id)}/report?mode=${mode}`);
+	return request(`/weeks/${encodeURIComponent(id)}/report?mode=${mode}&lang=${i18n.language}`);
 }
 
-export function polishReport(id: string, mode: ReportMode): Promise<{ markdown: string; mode: ReportMode }> {
+export function polishReport(
+	id: string,
+	mode: ReportMode
+): Promise<{ markdown: string; mode: ReportMode }> {
 	return request(`/weeks/${encodeURIComponent(id)}/report/polish`, {
 		method: 'POST',
-		body: JSON.stringify({ mode })
+		body: JSON.stringify({ mode, lang: i18n.language })
 	});
 }
 
@@ -143,5 +148,12 @@ export function fetchAIModels(draft: { baseUrl: string; apiKey: string }): Promi
 	return request('/settings/ai/models', {
 		method: 'POST',
 		body: JSON.stringify(draft)
+	});
+}
+
+export function saveLanguage(language: 'zh' | 'en'): Promise<SettingsPublic> {
+	return request('/settings', {
+		method: 'PUT',
+		body: JSON.stringify({ language })
 	});
 }

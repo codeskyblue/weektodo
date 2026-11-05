@@ -52,7 +52,8 @@ type AIConfig struct {
 
 // Settings is stored separately from task data.
 type Settings struct {
-	AI AIConfig `json:"ai"`
+	AI       AIConfig `json:"ai"`
+	Language string   `json:"language,omitempty"`
 }
 
 // WeekSummary is a lightweight week list entry.

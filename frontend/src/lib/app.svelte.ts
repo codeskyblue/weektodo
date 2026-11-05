@@ -33,6 +33,7 @@ import {
 	uncompleteSubtree,
 	visibleRows
 } from './tree';
+import { i18n, t, type Language } from './i18n.svelte';
 import { emitWails, onWails } from './wails';
 
 export type SaveStatus = 'saved' | 'saving' | 'error';
@@ -51,7 +52,7 @@ function messageOf(error: unknown): string {
 
 function taskLabel(task: Task): string {
 	const text = task.text.trim();
-	return text || '（无标题任务）';
+	return text || t('（无标题任务）');
 }
 
 class AppState {
@@ -80,7 +81,7 @@ class AppState {
 		open: false,
 		title: '',
 		description: '',
-		confirmLabel: '确定'
+		confirmLabel: t('确定')
 	});
 	quickAddFocus = $state(0);
 	focusRequest = $state<{ id: string; caret: 'start' | 'end'; nonce: number } | null>(null);
@@ -136,6 +137,11 @@ class AppState {
 			]);
 			this.meta = meta;
 			this.settings = settings;
+			const language: Language =
+				settings.language === 'zh' || settings.language === 'en' ? settings.language : i18n.language;
+			i18n.setLanguage(language);
+			if (!settings.language) void api.saveLanguage(language);
+			emitWails('weektodo:changed');
 			this.currentWeekId = weeks.currentWeekId;
 			const wanted = new URLSearchParams(window.location.search).get('week');
 			const initial = wanted && /^\d{4}-W\d{2}$/.test(wanted) ? wanted : meta.currentWeekId;
@@ -237,10 +243,10 @@ class AppState {
 		} catch (error) {
 			this.saveStatus = 'error';
 			this.saveError = messageOf(error);
-			toast.error('保存失败', {
+			toast.error(t('保存失败'), {
 				description: this.saveError,
 				action: {
-					label: '重试',
+					label: t('重试'),
 					onClick: () => this.retrySave()
 				}
 			});
@@ -328,9 +334,9 @@ class AppState {
 		const pending = countTodoDescendants(task);
 		if (task.children.length > 0 && pending > 0) {
 			this.askConfirm({
-				title: '完成父任务？',
-				description: `「${taskLabel(task)}」还有 ${pending} 个未完成的子任务。完成后会把这些子任务一起勾选。`,
-				confirmLabel: '全部完成',
+				title: t('完成父任务？'),
+				description: t('「{title}」还有 {count} 个未完成的子任务。完成后会把这些子任务一起勾选。', { title: taskLabel(task), count: pending }),
+				confirmLabel: t('全部完成'),
 				onConfirm: () => {
 					completeSubtree(task);
 					recomputeParents(this.week!.tasks);
@@ -355,18 +361,18 @@ class AppState {
 			dropSubtree(task);
 			recomputeParents(this.week!.tasks);
 			this.markDirty();
-			toast.success('已废弃', {
+			toast.success(t('已废弃'), {
 				action: {
-					label: '撤销',
+					label: t('撤销'),
 					onClick: () => this.restoreTask(taskId)
 				}
 			});
 		};
 		if (total > 1) {
 			this.askConfirm({
-				title: '废弃任务？',
-				description: `「${taskLabel(task)}」及其 ${total - 1} 个子任务都会被废弃，且不计入完成率和周报。`,
-				confirmLabel: '废弃',
+				title: t('废弃任务？'),
+				description: t('「{title}」及其 {count} 个子任务都会被废弃，且不计入完成率和周报。', { title: taskLabel(task), count: total - 1 }),
+				confirmLabel: t('废弃'),
 				destructive: true,
 				onConfirm: apply
 			});
@@ -394,12 +400,12 @@ class AppState {
 		const rowIndex = rows.findIndex((row) => row.task.id === taskId);
 		const fallbackFocus = rowIndex > 0 ? rows[rowIndex - 1].task.id : null;
 		this.askConfirm({
-			title: '删除任务？',
+			title: t('删除任务？'),
 			description:
 				total > 1
-					? `「${taskLabel(task)}」及其 ${total - 1} 个子任务会被永久删除。`
-					: `「${taskLabel(task)}」会被永久删除。`,
-			confirmLabel: '删除',
+					? t('「{title}」及其 {count} 个子任务会被永久删除。', { title: taskLabel(task), count: total - 1 })
+					: t('「{title}」会被永久删除。', { title: taskLabel(task) }),
+			confirmLabel: t('删除'),
 			destructive: true,
 			onConfirm: () => {
 				removeTask(this.week!.tasks, taskId);
@@ -454,7 +460,7 @@ class AppState {
 			open: true,
 			title: options.title,
 			description: options.description ?? '',
-			confirmLabel: options.confirmLabel ?? '确定',
+			confirmLabel: options.confirmLabel ?? t('确定'),
 			destructive: options.destructive ?? false,
 			onConfirm: options.onConfirm
 		};
@@ -476,24 +482,24 @@ class AppState {
 		try {
 			const preview: CarryPreview = await api.carryPreview(this.week.id);
 			if (preview.reason === 'no_previous_week') {
-				toast.info('上周还没有记录', { description: '没有可以带入的任务。' });
+				toast.info(t('上周还没有记录'), { description: t('没有可以带入的任务。') });
 				return;
 			}
 			if (preview.count === 0) {
 				toast.info(
-					preview.skipped > 0 ? '上周未完成的任务已经全部带入本周' : '上周没有未完成的任务'
+					preview.skipped > 0 ? t('上周未完成的任务已经全部带入本周') : t('上周没有未完成的任务')
 				);
 				return;
 			}
 			const previewText = preview.tasks
 				.slice(0, 6)
-				.map((task) => `${'  '.repeat(task.depth)}· ${task.text || '（无标题任务）'}`)
+				.map((task) => `${'  '.repeat(task.depth)}· ${task.text || t('（无标题任务）')}`)
 				.join('\n');
-			const more = preview.tasks.length > 6 ? `\n… 还有 ${preview.tasks.length - 6} 个` : '';
+			const more = preview.tasks.length > 6 ? '\n' + t('… 还有 {count} 个', { count: preview.tasks.length - 6 }) : '';
 			this.askConfirm({
-				title: '带入上周未完成任务',
-				description: `将带入 ${preview.count} 个任务${preview.skipped > 0 ? `，跳过 ${preview.skipped} 个已带入的任务` : ''}：\n\n${previewText}${more}`,
-				confirmLabel: '带入',
+				title: t('带入上周未完成任务'),
+				description: t('将带入 {count} 个任务{skipped}：\n\n{preview}{more}', { count: preview.count, skipped: preview.skipped > 0 ? t('，跳过 {count} 个已带入的任务', { count: preview.skipped }) : '', preview: previewText, more }),
+				confirmLabel: t('带入'),
 				onConfirm: async () => {
 					const weekId = this.week?.id;
 					if (!weekId) return;
@@ -507,22 +513,22 @@ class AppState {
 						this.dirty = false;
 						this.revision++;
 						if (result.created > 0) {
-							toast.success(`已带入 ${result.created} 个任务`, {
-								description: result.skipped > 0 ? `跳过 ${result.skipped} 个已带入的任务` : undefined
+							toast.success(t('已带入 {count} 个任务', { count: result.created }), {
+								description: result.skipped > 0 ? t('跳过 {count} 个已带入的任务', { count: result.skipped }) : undefined
 							});
 						} else {
-							toast.info('没有新的任务可带入');
+							toast.info(t('没有新的任务可带入'));
 						}
 						emitWails('weektodo:changed');
 					} catch (error) {
-						toast.error('带入失败', { description: messageOf(error) });
+						toast.error(t('带入失败'), { description: messageOf(error) });
 					} finally {
 						this.carryBusy = false;
 					}
 				}
 			});
 		} catch (error) {
-			toast.error('无法读取上周任务', { description: messageOf(error) });
+			toast.error(t('无法读取上周任务'), { description: messageOf(error) });
 		} finally {
 			this.carryBusy = false;
 		}
@@ -559,16 +565,16 @@ class AppState {
 		if (!this.week) return;
 		if (!this.settings?.ai.configured) {
 			this.settingsOpen = true;
-			toast.info('请先配置 AI 接口');
+			toast.info(t('请先配置 AI 接口'));
 			return;
 		}
 		this.aiLoading = true;
 		try {
 			const response = await api.polishReport(this.week.id, this.reportMode);
 			this.aiMarkdown = response.markdown;
-			toast.success('AI 周报已生成');
+			toast.success(t('AI 周报已生成'));
 		} catch (error) {
-			toast.error('AI 润色失败', { description: messageOf(error) });
+			toast.error(t('AI 润色失败'), { description: messageOf(error) });
 		} finally {
 			this.aiLoading = false;
 		}
@@ -578,13 +584,25 @@ class AppState {
 		this.aiMarkdown = '';
 	}
 
+	async setLanguage(language: Language): Promise<void> {
+		i18n.setLanguage(language);
+		this.aiMarkdown = '';
+		if (this.reportOpen) void this.refreshReport();
+		try {
+			this.settings = await api.saveLanguage(language);
+			emitWails('weektodo:changed');
+		} catch (error) {
+			toast.error(t('保存设置失败'), { description: messageOf(error) });
+		}
+	}
+
 	async saveAISettings(draft: api.SettingsDraft): Promise<boolean> {
 		try {
 			this.settings = await api.saveSettings(draft);
-			toast.success('设置已保存');
+			toast.success(t('设置已保存'));
 			return true;
 		} catch (error) {
-			toast.error('保存设置失败', { description: messageOf(error) });
+			toast.error(t('保存设置失败'), { description: messageOf(error) });
 			return false;
 		}
 	}
@@ -592,10 +610,10 @@ class AppState {
 	async testAISettings(draft: { baseUrl: string; model: string; apiKey: string }): Promise<boolean> {
 		try {
 			await api.testAI(draft);
-			toast.success('AI 连接成功');
+			toast.success(t('AI 连接成功'));
 			return true;
 		} catch (error) {
-			toast.error('AI 连接失败', { description: messageOf(error) });
+			toast.error(t('AI 连接失败'), { description: messageOf(error) });
 			return false;
 		}
 	}

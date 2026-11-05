@@ -2,6 +2,7 @@
 	import CalendarDays from '@lucide/svelte/icons/calendar-days';
 	import X from '@lucide/svelte/icons/x';
 	import { app } from '#lib/app.svelte';
+	import { t } from '#lib/i18n.svelte';
 	import { daysOfWeek, weekdayLabel } from '#lib/date';
 	import type { Task } from '#lib/types';
 	import { Button } from '#lib/components/ui/button/index.js';
@@ -11,7 +12,7 @@
 	let open = $state(false);
 
 	const days = $derived(app.week ? daysOfWeek(app.week.start) : []);
-	const label = $derived(task.day ? (task.day === app.today ? '今天' : weekdayLabel(task.day)) : '');
+	const label = $derived(task.day ? (task.day === app.today ? t('今天') : weekdayLabel(task.day)) : '');
 </script>
 
 <Popover.Root bind:open>
@@ -23,7 +24,7 @@
 				size="xs"
 				disabled={task.status === 'dropped'}
 				class="h-6 gap-1 px-1.5 text-xs font-normal text-muted-foreground hover:text-foreground"
-				title="设置日期"
+				title={t('设置日期')}
 			>
 				<CalendarDays class="size-3.5" />
 				{#if label}<span>{label}</span>{/if}
@@ -59,7 +60,7 @@
 					open = false;
 				}}
 			>
-				<X class="size-3.5" /> 清除日期
+				<X class="size-3.5" /> {t('清除日期')}
 			</Button>
 		{/if}
 	</Popover.Content>

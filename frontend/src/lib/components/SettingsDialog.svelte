@@ -14,6 +14,7 @@
 	import { setMode, userPrefersMode } from 'mode-watcher';
 	import * as api from '#lib/api';
 	import { app } from '#lib/app.svelte';
+	import { i18n, t } from '#lib/i18n.svelte';
 	import { openExternal } from '#lib/wails';
 	import type { UpdateInfo, UpdateProgress } from '#lib/types';
 	import { Badge } from '#lib/components/ui/badge/index.js';
@@ -70,12 +71,12 @@
 	);
 	const progressLabel = $derived(
 		updateProgress.stage === 'downloading'
-			? '正在下载…'
+			? t('正在下载…')
 			: updateProgress.stage === 'installing'
-				? '正在安装…'
+				? t('正在安装…')
 				: updateProgress.stage === 'done'
-					? '正在重启…'
-					: '准备中…'
+					? t('正在重启…')
+					: t('准备中…')
 	);
 
 	onDestroy(() => {
@@ -175,7 +176,7 @@
 		try {
 			await api.applyUpdate();
 			restarting = true;
-			toast.success('更新已安装，正在重启…');
+			toast.success(t('更新已安装，正在重启…'));
 			await waitForRestart();
 		} catch (error) {
 			updateError = error instanceof Error ? error.message : String(error);
@@ -198,7 +199,7 @@
 			}
 		}
 		restarting = false;
-		updateError = '重启超时，请手动重新打开 WeekTodo。';
+		updateError = t('重启超时，请手动重新打开 WeekTodo。');
 	}
 
 	async function save(): Promise<void> {
@@ -222,11 +223,11 @@
 		if (loadingModels) return;
 		modelError = '';
 		if (!baseUrl.trim()) {
-			modelError = '请先填写 Base URL';
+			modelError = t('请先填写 Base URL');
 			return;
 		}
 		if (!apiKey.trim() && !configured) {
-			modelError = '请先填写 API Key';
+			modelError = t('请先填写 API Key');
 			return;
 		}
 		lastModelFetchSignature = baseUrl.trim() + '|' + apiKey.trim();
@@ -236,7 +237,7 @@
 			modelOptions = result.models;
 			modelFilter = '';
 			if (result.models.length === 0) {
-				modelError = '接口没有返回模型列表';
+				modelError = t('接口没有返回模型列表');
 			}
 		} catch (error) {
 			modelOptions = [];
@@ -257,9 +258,9 @@
 		if (!app.meta) return;
 		try {
 			await navigator.clipboard.writeText(app.meta.dataDir);
-			toast.success('路径已复制');
+			toast.success(t('路径已复制'));
 		} catch {
-			toast.error('复制失败');
+			toast.error(t('复制失败'));
 		}
 	}
 </script>
@@ -267,22 +268,22 @@
 <Dialog.Root bind:open={app.settingsOpen}>
 	<Dialog.Content class="max-h-[88vh] overflow-y-auto sm:max-w-lg">
 		<Dialog.Header>
-			<Dialog.Title>设置</Dialog.Title>
-			<Dialog.Description>配置 AI 周报润色和界面外观。</Dialog.Description>
+			<Dialog.Title>{t('设置')}</Dialog.Title>
+			<Dialog.Description>{t('配置 AI 周报润色和界面外观。')}</Dialog.Description>
 		</Dialog.Header>
 
 		<div class="space-y-6 py-1">
 			<section class="space-y-3">
 				<div class="flex items-center justify-between">
 					<div>
-						<h3 class="text-sm font-medium">AI 周报润色</h3>
+						<h3 class="text-sm font-medium">{t('AI 周报润色')}</h3>
 						<p class="mt-0.5 text-xs text-muted-foreground">
-							兼容 OpenAI 的 /chat/completions 接口。
+							{t('兼容 OpenAI 的 /chat/completions 接口。')}
 						</p>
 					</div>
 					{#if configured}
 						<span class="flex items-center gap-1 text-xs text-emerald-600 dark:text-emerald-400">
-							<Check class="size-3.5" /> 已配置
+							<Check class="size-3.5" /> {t('已配置')}
 						</span>
 					{/if}
 				</div>
@@ -306,16 +307,16 @@
 						bind:value={apiKey}
 						oninput={handleApiKeyInput}
 						onblur={handleAutoFetchBlur}
-						placeholder={configured ? `已保存 ${hint}，留空保持不变` : 'sk-...'}
+						placeholder={configured ? t('已保存 {hint}，留空保持不变', { hint }) : 'sk-...'}
 						autocomplete="off"
 					/>
 					<p class="text-xs text-muted-foreground">
-						Key 只保存在本机 settings.json（权限 0600），不会回传前端。
+						{t('Key 只保存在本机 settings.json（权限 0600），不会回传前端。')}
 					</p>
 				</div>
 
 				<div class="space-y-1.5">
-					<Label for="ai-model">模型</Label>
+					<Label for="ai-model">{t('模型')}</Label>
 					<div class="flex gap-2">
 						<Input
 							id="ai-model"
@@ -332,9 +333,9 @@
 							disabled={loadingModels}
 						>
 							{#if loadingModels}
-								<Loader2 class="animate-spin" /> 获取中…
+								<Loader2 class="animate-spin" /> {t('获取中…')}
 							{:else}
-								<List /> 获取列表
+								<List /> {t('获取列表')}
 							{/if}
 						</Button>
 					</div>
@@ -346,7 +347,7 @@
 							<div class="border-b p-1.5">
 								<Input
 									bind:value={modelFilter}
-									placeholder={`筛选 ${modelOptions.length} 个模型…`}
+									placeholder={t('筛选 {count} 个模型…', { count: modelOptions.length })}
 									class="h-7 text-xs"
 								/>
 							</div>
@@ -363,7 +364,7 @@
 										{/if}
 									</button>
 								{:else}
-									<p class="px-2 py-3 text-xs text-muted-foreground">没有匹配的模型</p>
+									<p class="px-2 py-3 text-xs text-muted-foreground">{t('没有匹配的模型')}</p>
 								{/each}
 							</div>
 						</div>
@@ -372,8 +373,8 @@
 
 				<div class="flex flex-wrap items-center gap-2">
 					<Button variant="outline" size="sm" onclick={test} disabled={testing || saving}>
-						{#if testing}<Loader2 class="animate-spin" /> 测试中…
-						{:else}测试连接{/if}
+						{#if testing}<Loader2 class="animate-spin" /> {t('测试中…')}
+						{:else}{t('测试连接')}{/if}
 					</Button>
 					{#if configured}
 						<Button
@@ -385,11 +386,11 @@
 								apiKey = '';
 							}}
 						>
-							清除已保存的 Key
+							{t('清除已保存的 Key')}
 						</Button>
 					{/if}
 					{#if clearApiKey}
-						<span class="text-xs text-destructive">保存后将清除 Key</span>
+						<span class="text-xs text-destructive">{t('保存后将清除 Key')}</span>
 					{/if}
 				</div>
 			</section>
@@ -397,28 +398,50 @@
 			<Separator />
 
 			<section class="space-y-2">
-				<h3 class="text-sm font-medium">外观</h3>
+				<h3 class="text-sm font-medium">{t('外观')}</h3>
 				<div class="flex gap-1.5">
 					<Button
 						variant={userPrefersMode.current === 'light' ? 'secondary' : 'outline'}
 						size="sm"
 						onclick={() => setMode('light')}
 					>
-						<Sun /> 浅色
+						<Sun /> {t('浅色')}
 					</Button>
 					<Button
 						variant={userPrefersMode.current === 'dark' ? 'secondary' : 'outline'}
 						size="sm"
 						onclick={() => setMode('dark')}
 					>
-						<Moon /> 深色
+						<Moon /> {t('深色')}
 					</Button>
 					<Button
 						variant={userPrefersMode.current === undefined ? 'secondary' : 'outline'}
 						size="sm"
 						onclick={() => setMode('system')}
 					>
-						<Monitor /> 跟随系统
+						<Monitor /> {t('跟随系统')}
+					</Button>
+				</div>
+			</section>
+
+			<Separator />
+
+			<section class="space-y-2">
+				<h3 class="text-sm font-medium">{t('语言')}</h3>
+				<div class="flex gap-1.5">
+					<Button
+						variant={i18n.language === 'zh' ? 'secondary' : 'outline'}
+						size="sm"
+						onclick={() => app.setLanguage('zh')}
+					>
+						{t('简体中文')}
+					</Button>
+					<Button
+						variant={i18n.language === 'en' ? 'secondary' : 'outline'}
+						size="sm"
+						onclick={() => app.setLanguage('en')}
+					>
+						{t('English')}
 					</Button>
 				</div>
 			</section>
@@ -428,9 +451,9 @@
 			<section class="space-y-2">
 				<div class="flex items-start justify-between gap-3">
 					<div>
-						<h3 class="text-sm font-medium">应用更新</h3>
+						<h3 class="text-sm font-medium">{t('应用更新')}</h3>
 						<p class="mt-0.5 text-xs text-muted-foreground">
-							当前版本 {app.meta?.version ?? 'dev'}
+							{t('当前版本 {version}', { version: app.meta?.version ?? 'dev' })}
 						</p>
 					</div>
 					<Button
@@ -440,9 +463,9 @@
 						disabled={checkingUpdate || installingUpdate}
 					>
 						{#if checkingUpdate}
-							<RefreshCw class="animate-spin" /> 检查中…
+							<RefreshCw class="animate-spin" /> {t('检查中…')}
 						{:else}
-							<RefreshCw /> 检查更新
+							<RefreshCw /> {t('检查更新')}
 						{/if}
 					</Button>
 				</div>
@@ -455,8 +478,8 @@
 					{#if updateInfo.available}
 						<div class="space-y-2 rounded-lg border p-3">
 							<div class="flex flex-wrap items-center gap-2">
-								<span class="text-sm font-medium">发现 v{updateInfo.latest}</span>
-								<Badge variant="secondary">来源 {updateSource}</Badge>
+								<span class="text-sm font-medium">{t('发现 v{version}', { version: updateInfo.latest })}</span>
+								<Badge variant="secondary">{t('来源 {source}', { source: updateSource })}</Badge>
 								{#if updateInfo.published_at}
 									<span class="text-xs text-muted-foreground">
 										{updateInfo.published_at.slice(0, 10)}
@@ -470,9 +493,9 @@
 							<div class="flex flex-wrap items-center gap-2">
 								<Button size="sm" onclick={installUpdate} disabled={installingUpdate}>
 									{#if installingUpdate}
-										<Loader2 class="animate-spin" /> 正在更新…
+										<Loader2 class="animate-spin" /> {t('正在更新…')}
 									{:else}
-										<Download /> 安装 v{updateInfo.latest}
+										<Download /> {t('安装 v{version}', { version: updateInfo.latest })}
 									{/if}
 								</Button>
 								{#if updateInfo.release_url}
@@ -481,7 +504,7 @@
 										size="sm"
 										onclick={() => openExternal(updateInfo!.release_url)}
 									>
-										<ExternalLink /> 查看 Release
+										<ExternalLink /> {t('查看 Release')}
 									</Button>
 								{/if}
 							</div>
@@ -498,7 +521,7 @@
 						</div>
 					{:else}
 						<p class="text-xs text-muted-foreground">
-							{updateInfo.dev ? '当前是开发版本，无法检查更新。' : '当前已是最新版本。'}
+							{updateInfo.dev ? t('当前是开发版本，无法检查更新。') : t('当前已是最新版本。')}
 						</p>
 					{/if}
 				{/if}
@@ -507,12 +530,12 @@
 			<Separator />
 
 			<section class="space-y-2">
-				<h3 class="text-sm font-medium">数据</h3>
+				<h3 class="text-sm font-medium">{t('数据')}</h3>
 				<div class="flex items-center gap-2">
 					<code class="min-w-0 flex-1 truncate rounded-md bg-muted px-2 py-1.5 text-xs">
 						{app.meta?.dataDir ?? '—'}
 					</code>
-					<Button variant="ghost" size="icon-sm" onclick={copyPath} title="复制路径">
+					<Button variant="ghost" size="icon-sm" onclick={copyPath} title={t('复制路径')}>
 						<Copy />
 					</Button>
 				</div>
@@ -521,16 +544,16 @@
 					{#if app.meta?.commit && app.meta.commit !== 'unknown'}
 						· {app.meta.commit.slice(0, 7)}
 					{/if}
-					· 数据以 JSON 保存，每天首次保存时会自动备份，保留 14 天。
+					· {t('数据以 JSON 保存，每天首次保存时会自动备份，保留 14 天。')}
 				</p>
 			</section>
 		</div>
 
 		<Dialog.Footer>
-			<Button variant="outline" size="sm" onclick={() => (app.settingsOpen = false)}>关闭</Button>
+			<Button variant="outline" size="sm" onclick={() => (app.settingsOpen = false)}>{t('关闭')}</Button>
 			<Button size="sm" onclick={save} disabled={saving}>
-				{#if saving}<Loader2 class="animate-spin" /> 保存中…
-				{:else}保存设置{/if}
+				{#if saving}<Loader2 class="animate-spin" /> {t('保存中…')}
+				{:else}{t('保存设置')}{/if}
 			</Button>
 		</Dialog.Footer>
 	</Dialog.Content>

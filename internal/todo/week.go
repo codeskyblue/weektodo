@@ -71,8 +71,3 @@ func DateString(t time.Time) string {
 func ParseDate(value string) (time.Time, error) {
 	return time.ParseInLocation("2006-01-02", value, time.Local)
 }
-
-// WeekdayCN returns the Chinese weekday label for a date.
-func WeekdayCN(t time.Time) string {
-	return [...]string{"周日", "周一", "周二", "周三", "周四", "周五", "周六"}[int(t.Weekday())]
-}

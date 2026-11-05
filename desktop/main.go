@@ -8,10 +8,12 @@ import (
 	"runtime"
 	"strconv"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"time"
 
 	"github.com/uiautodev/weektodo/internal/ai"
+	"github.com/uiautodev/weektodo/internal/i18n"
 	"github.com/uiautodev/weektodo/internal/server"
 	"github.com/uiautodev/weektodo/internal/store"
 	"github.com/uiautodev/weektodo/internal/update"
@@ -42,7 +44,7 @@ func main() {
 
 	app := application.New(application.Options{
 		Name:        "WeekTodo",
-		Description: "按周记录、整理和总结你的待办事项",
+		Description: "Weekly task planner",
 		Assets: application.AssetOptions{
 			Handler: srv.Handler(),
 		},
@@ -62,26 +64,145 @@ func main() {
 		URL:              "/",
 	})
 
+	initialLanguage := i18n.Normalize(st.Settings().Language)
+	if initialLanguage == "" {
+		initialLanguage = i18n.System()
+	}
+	var languageMu sync.Mutex
+	language := initialLanguage
+	currentLanguage := func() i18n.Language {
+		languageMu.Lock()
+		defer languageMu.Unlock()
+		return language
+	}
+	setLanguage := func(next i18n.Language) {
+		languageMu.Lock()
+		language = next
+		languageMu.Unlock()
+	}
+
 	var quitting atomic.Bool
 	var updateInProgress atomic.Bool
 	var tray *application.SystemTray
 	var statusItem *application.MenuItem
-	window.RegisterHook(events.Common.WindowClosing, func(event *application.WindowEvent) {
-		if quitting.Load() {
-			return
-		}
-		app.Event.Emit("weektodo:window-hiding")
-		window.Hide()
-		event.Cancel()
-	})
 
 	showWindow := func() {
+		setAppRegular()
 		window.Show()
 		window.Restore()
 		window.Focus()
 	}
+	hideWindow := func() {
+		app.Event.Emit("weektodo:window-hiding")
+		setAppAccessory()
+		window.Hide()
+	}
+	quitApp := func() {
+		app.Event.Emit("weektodo:window-hiding")
+		time.Sleep(150 * time.Millisecond)
+		quitting.Store(true)
+		app.Quit()
+	}
+
+	window.RegisterHook(events.Common.WindowClosing, func(event *application.WindowEvent) {
+		if quitting.Load() {
+			return
+		}
+		hideWindow()
+		event.Cancel()
+	})
+
+	checkUpdates := func(lang i18n.Language) {
+		if updateInProgress.Load() {
+			return
+		}
+		text := trayText(lang)
+		info, err := updater.Check(context.Background(), version)
+		if err != nil {
+			app.Dialog.Error().SetTitle(text.checkFailed).SetMessage(err.Error()).Show()
+			return
+		}
+		if !info.Available {
+			message := text.upToDate
+			if info.Dev {
+				message = text.devBuild
+			}
+			app.Dialog.Info().SetTitle(text.checkUpdates).SetMessage(message).Show()
+			return
+		}
+		source := ""
+		if info.Source == "gh-proxy" {
+			source = text.viaProxy
+		}
+		notes := strings.TrimSpace(info.Notes)
+		if len([]rune(notes)) > 1800 {
+			notes = string([]rune(notes)[:1800]) + "…"
+		}
+		message := fmt.Sprintf(text.updateMessage, info.Latest, source)
+		if notes != "" {
+			message += "\n\n" + notes
+		}
+		dialog := app.Dialog.Question().
+			SetTitle(text.updateAvailable).
+			SetMessage(message)
+		dialog.AddButton(text.later).SetAsDefault()
+		dialog.AddButton(text.install).OnClick(func() {
+			if !updateInProgress.CompareAndSwap(false, true) {
+				return
+			}
+			go func() {
+				defer updateInProgress.Store(false)
+				app.Dialog.Info().
+					SetTitle(text.installing).
+					SetMessage(fmt.Sprintf(text.installingMessage, info.Latest)).
+					Show()
+				if _, err := updater.Apply(context.Background(), info); err != nil {
+					app.Dialog.Error().SetTitle(text.installFailed).SetMessage(err.Error()).Show()
+					return
+				}
+				if err := updater.Restart(); err != nil {
+					app.Dialog.Error().SetTitle(text.restartFailed).SetMessage(err.Error()).Show()
+				}
+			}()
+		})
+		dialog.Show()
+	}
+
+	buildMenu := func() *application.Menu {
+		lang := currentLanguage()
+		text := trayText(lang)
+		menu := app.NewMenu()
+		menu.Add(text.open).OnClick(func(*application.Context) { showWindow() })
+		menu.Add(text.quickAdd).OnClick(func(*application.Context) {
+			showWindow()
+			time.AfterFunc(180*time.Millisecond, func() {
+				app.Event.Emit("weektodo:focus-quick-add")
+			})
+		})
+		menu.Add(text.checkUpdates).OnClick(func(*application.Context) {
+			go checkUpdates(currentLanguage())
+		})
+		statusItem = menu.Add(fmt.Sprintf(text.today, st.TodayCount(time.Now())))
+		statusItem.SetEnabled(false)
+		menu.AddSeparator()
+		menu.Add(text.hide).OnClick(func(*application.Context) { hideWindow() })
+		menu.AddSeparator()
+		menu.Add(text.quit).OnClick(func(*application.Context) { quitApp() })
+		return menu
+	}
+
+	syncLanguage := func() {
+		next := i18n.Normalize(st.Settings().Language)
+		if next != "" && next != currentLanguage() {
+			setLanguage(next)
+			tray.SetMenu(buildMenu())
+		}
+	}
 
 	refreshTray := func() {
+		syncLanguage()
+		lang := currentLanguage()
+		text := trayText(lang)
 		count := st.TodayCount(time.Now())
 		application.InvokeSync(func() {
 			if count > 0 {
@@ -89,64 +210,9 @@ func main() {
 			} else {
 				tray.SetLabel("")
 			}
-			tray.SetTooltip(fmt.Sprintf("WeekTodo · 今天 %d 项待办", count))
-			statusItem.SetLabel(fmt.Sprintf("今天还有 %d 项待办", count))
+			tray.SetTooltip(fmt.Sprintf("WeekTodo · %s", fmt.Sprintf(text.today, count)))
+			statusItem.SetLabel(fmt.Sprintf(text.today, count))
 		})
-	}
-
-	checkUpdates := func() {
-		if updateInProgress.Load() {
-			return
-		}
-		info, err := updater.Check(context.Background(), version)
-		if err != nil {
-			app.Dialog.Error().SetTitle("检查更新").SetMessage(err.Error()).Show()
-			return
-		}
-		if !info.Available {
-			message := "当前已是最新版本。"
-			if info.Dev {
-				message = "当前是开发版本，无法检查更新。"
-			}
-			app.Dialog.Info().SetTitle("检查更新").SetMessage(message).Show()
-			return
-		}
-		source := ""
-		if info.Source == "gh-proxy" {
-			source = "（通过 gh-proxy）"
-		}
-		notes := strings.TrimSpace(info.Notes)
-		if len([]rune(notes)) > 1800 {
-			notes = string([]rune(notes)[:1800]) + "…"
-		}
-		message := fmt.Sprintf("WeekTodo %s 已发布%s，是否安装并重启？", info.Latest, source)
-		if notes != "" {
-			message += "\n\n" + notes
-		}
-		dialog := app.Dialog.Question().
-			SetTitle("发现新版本").
-			SetMessage(message)
-		dialog.AddButton("稍后").SetAsDefault()
-		dialog.AddButton("安装并重启").OnClick(func() {
-			if !updateInProgress.CompareAndSwap(false, true) {
-				return
-			}
-			go func() {
-				defer updateInProgress.Store(false)
-				app.Dialog.Info().
-					SetTitle("正在安装更新").
-					SetMessage(fmt.Sprintf("正在安装 WeekTodo %s，应用会自动重启。", info.Latest)).
-					Show()
-				if _, err := updater.Apply(context.Background(), info); err != nil {
-					app.Dialog.Error().SetTitle("安装更新失败").SetMessage(err.Error()).Show()
-					return
-				}
-				if err := updater.Restart(); err != nil {
-					app.Dialog.Error().SetTitle("重启失败").SetMessage(err.Error()).Show()
-				}
-			}()
-		})
-		dialog.Show()
 	}
 
 	tray = app.SystemTray.New()
@@ -155,43 +221,22 @@ func main() {
 	} else {
 		tray.SetIcon(trayIcon)
 	}
-	tray.SetTooltip("WeekTodo")
 	tray.OnClick(showWindow)
 	tray.OnRightClick(func() { tray.ShowMenu() })
-
-	menu := app.NewMenu()
-	menu.Add("打开 WeekTodo").OnClick(func(*application.Context) { showWindow() })
-	menu.Add("快速添加任务").OnClick(func(*application.Context) {
-		showWindow()
-		time.AfterFunc(180*time.Millisecond, func() {
-			app.Event.Emit("weektodo:focus-quick-add")
-		})
-	})
-	menu.Add("检查更新…").OnClick(func(*application.Context) {
-		go checkUpdates()
-	})
-	statusItem = menu.Add("今天还有 0 项待办")
-	statusItem.SetEnabled(false)
-	menu.AddSeparator()
-	menu.Add("隐藏窗口").OnClick(func(*application.Context) { window.Hide() })
-	menu.AddSeparator()
-	menu.Add("退出 WeekTodo").OnClick(func(*application.Context) {
-		app.Event.Emit("weektodo:window-hiding")
-		time.Sleep(150 * time.Millisecond)
-		quitting.Store(true)
-		app.Quit()
-	})
-	tray.SetMenu(menu)
+	tray.SetMenu(buildMenu())
 
 	app.Event.On("weektodo:changed", func(*application.CustomEvent) {
 		refreshTray()
 	})
 
 	app.Event.OnApplicationEvent(events.Common.ApplicationStarted, func(*application.ApplicationEvent) {
+		setAppRegular()
 		showWindow()
 		refreshTray()
 		go func() {
-			ticker := time.NewTicker(60 * time.Second)
+			// Poll the in-process store so the tray follows language and
+			// today-count changes even if a webview event is missed.
+			ticker := time.NewTicker(2 * time.Second)
 			defer ticker.Stop()
 			for range ticker.C {
 				refreshTray()
@@ -202,11 +247,6 @@ func main() {
 	if runtime.GOOS == "darwin" {
 		app.Event.OnApplicationEvent(events.Mac.ApplicationShouldHandleReopen, func(*application.ApplicationEvent) {
 			showWindow()
-		})
-		app.Event.OnApplicationEvent(events.Mac.ApplicationDidBecomeActive, func(*application.ApplicationEvent) {
-			if !window.IsVisible() {
-				showWindow()
-			}
 		})
 	}
 

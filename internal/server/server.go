@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/uiautodev/weektodo/internal/ai"
+	"github.com/uiautodev/weektodo/internal/i18n"
 	"github.com/uiautodev/weektodo/internal/model"
 	"github.com/uiautodev/weektodo/internal/store"
 	"github.com/uiautodev/weektodo/internal/todo"
@@ -69,7 +70,7 @@ func (s *Server) routes() {
 
 // Handler returns the root handler.
 func (s *Server) Handler() http.Handler {
-	return logRequests(s.mux)
+	return logRequests(withLanguage(s.mux))
 }
 
 func (s *Server) handleHealth(w http.ResponseWriter, _ *http.Request) {
@@ -210,6 +211,7 @@ func writeJSON(w http.ResponseWriter, status int, value any) {
 }
 
 func writeError(w http.ResponseWriter, status int, code, message string) {
+	message = i18n.TranslateError(responseLanguage(w), message)
 	writeJSON(w, status, map[string]string{"error": message, "code": code})
 }
 

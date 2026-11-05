@@ -1,6 +1,7 @@
 <script lang="ts">
 	import Download from '@lucide/svelte/icons/download';
 	import { app } from '#lib/app.svelte';
+	import { t } from '#lib/i18n.svelte';
 	import { flatten } from '#lib/tree';
 	import type { Filter } from '#lib/types';
 	import { Button } from '#lib/components/ui/button/index.js';
@@ -32,28 +33,28 @@
 		variant="outline"
 		size="sm"
 		bind:value={app.filter}
-		aria-label="任务筛选"
+		aria-label={t('任务筛选')}
 	>
 		{#each filters as item (item.value)}
-			<ToggleGroupItem value={item.value}>{item.label}</ToggleGroupItem>
+			<ToggleGroupItem value={item.value}>{t(item.label)}</ToggleGroupItem>
 		{/each}
 	</ToggleGroup>
 	<div class="flex items-center gap-2 text-xs text-muted-foreground">
 		{#if app.filter === 'today'}
-			今天还有 {todayTodo} 项待办
+			{t('今天还有 {count} 项待办', { count: todayTodo })}
 		{:else if app.stats.unplanned > 0}
-			{app.stats.unplanned} 项未安排日期
+			{t('{count} 项未安排日期', { count: app.stats.unplanned })}
 		{:else}
-			所有任务都已安排日期
+			{t('所有任务都已安排日期')}
 		{/if}
 		<Button
 			variant="ghost"
 			size="xs"
 			disabled={app.carryBusy}
 			onclick={() => app.openCarryOver()}
-			title="把上一周未完成的任务带入本周"
+			title={t('把上一周未完成的任务带入本周')}
 		>
-			<Download class="size-3.5" /> 带入上周
+			<Download class="size-3.5" /> {t('带入上周')}
 		</Button>
 	</div>
 </div>

@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { app } from '#lib/app.svelte';
+	import { t } from '#lib/i18n.svelte';
 	import * as AlertDialog from '#lib/components/ui/alert-dialog/index.js';
 </script>
 
@@ -14,7 +15,7 @@
 			{/if}
 		</AlertDialog.Header>
 		<AlertDialog.Footer>
-			<AlertDialog.Cancel onclick={() => app.cancelConfirm()}>取消</AlertDialog.Cancel>
+			<AlertDialog.Cancel onclick={() => app.cancelConfirm()}>{t('取消')}</AlertDialog.Cancel>
 			<AlertDialog.Action
 				variant={app.confirm.destructive ? 'destructive' : 'default'}
 				onclick={() => app.confirmAction()}

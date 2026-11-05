@@ -346,3 +346,32 @@ func TestAIModelsEndpoint(t *testing.T) {
 	}
 
 }
+
+func TestSettingsLanguageAndLocalizedErrors(t *testing.T) {
+	ts, _ := newTestServer(t)
+	status, raw := request(t, ts, http.MethodPut, "/api/settings", map[string]any{"language": "en"})
+	if status != http.StatusOK {
+		t.Fatalf("save language: %d %s", status, raw)
+	}
+	if got := decodeMap(t, raw)["language"]; got != "en" {
+		t.Fatalf("language = %v", got)
+	}
+
+	req, err := http.NewRequest(http.MethodGet, ts.URL+"/api/weeks/2025-W01", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	req.Header.Set("Accept-Language", "en")
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+	body, _ := io.ReadAll(resp.Body)
+	if resp.StatusCode != http.StatusNotFound {
+		t.Fatalf("status = %d", resp.StatusCode)
+	}
+	if !strings.Contains(string(body), "There is no record for this week") {
+		t.Fatalf("body = %s", body)
+	}
+}

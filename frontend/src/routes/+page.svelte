@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
 	import { app } from '#lib/app.svelte';
+	import { t } from '#lib/i18n.svelte';
 	import AppHeader from '#lib/components/AppHeader.svelte';
 	import ConfirmDialog from '#lib/components/ConfirmDialog.svelte';
 	import EmptyState from '#lib/components/EmptyState.svelte';
@@ -42,9 +43,9 @@
 		<main class="mx-auto flex w-full max-w-4xl flex-1 items-center justify-center px-4 py-10 sm:px-6">
 			<Card class="w-full max-w-md">
 				<CardContent class="flex flex-col items-center gap-3 py-10 text-center">
-					<div class="text-sm font-medium">加载失败</div>
+					<div class="text-sm font-medium">{t('加载失败')}</div>
 					<p class="text-xs text-muted-foreground">{app.error}</p>
-					<Button variant="outline" size="sm" onclick={() => app.init()}>重试</Button>
+					<Button variant="outline" size="sm" onclick={() => app.init()}>{t('重试')}</Button>
 				</CardContent>
 			</Card>
 		</main>

@@ -13,6 +13,7 @@ import (
 	"time"
 	"unicode/utf8"
 
+	"github.com/uiautodev/weektodo/internal/i18n"
 	"github.com/uiautodev/weektodo/internal/model"
 	"github.com/uiautodev/weektodo/internal/todo"
 )
@@ -28,46 +29,46 @@ func New() *Client {
 }
 
 // ValidateEndpoint checks the URL and credentials needed to reach the API.
-func ValidateEndpoint(cfg model.AIConfig) error {
+func ValidateEndpoint(cfg model.AIConfig, lang i18n.Language) error {
 	if strings.TrimSpace(cfg.BaseURL) == "" {
-		return fmt.Errorf("请先填写 AI Base URL")
+		return fmt.Errorf("%s", i18n.T(lang, "请先填写 AI Base URL", "Fill in the AI Base URL first"))
 	}
 	parsed, err := url.Parse(strings.TrimSpace(cfg.BaseURL))
 	if err != nil || (parsed.Scheme != "http" && parsed.Scheme != "https") || parsed.Host == "" {
-		return fmt.Errorf("AI Base URL 必须是 http:// 或 https:// 地址")
+		return fmt.Errorf("%s", i18n.T(lang, "AI Base URL 必须是 http:// 或 https:// 地址", "AI Base URL must be an http:// or https:// address"))
 	}
 	if strings.TrimSpace(cfg.APIKey) == "" {
-		return fmt.Errorf("请先填写 API Key")
+		return fmt.Errorf("%s", i18n.T(lang, "请先填写 API Key", "Fill in the API key first"))
 	}
 	return nil
 }
 
 // ValidateConfig checks the complete chat endpoint configuration.
-func ValidateConfig(cfg model.AIConfig) error {
-	if err := ValidateEndpoint(cfg); err != nil {
+func ValidateConfig(cfg model.AIConfig, lang i18n.Language) error {
+	if err := ValidateEndpoint(cfg, lang); err != nil {
 		return err
 	}
 	if strings.TrimSpace(cfg.Model) == "" {
-		return fmt.Errorf("请先填写模型名称")
+		return fmt.Errorf("%s", i18n.T(lang, "请先填写模型名称", "Fill in the model name first"))
 	}
 	return nil
 }
 
 // Models fetches the OpenAI-compatible model list from the configured endpoint.
-func (c *Client) Models(ctx context.Context, cfg model.AIConfig) ([]string, error) {
-	if err := ValidateEndpoint(cfg); err != nil {
+func (c *Client) Models(ctx context.Context, cfg model.AIConfig, lang i18n.Language) ([]string, error) {
+	if err := ValidateEndpoint(cfg, lang); err != nil {
 		return nil, err
 	}
 	endpoint := modelsEndpoint(cfg.BaseURL)
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint, nil)
 	if err != nil {
-		return nil, fmt.Errorf("构建模型列表请求失败: %w", err)
+		return nil, fmt.Errorf("%s: %w", i18n.T(lang, "构建模型列表请求失败", "Failed to build the model list request"), err)
 	}
 	req.Header.Set("Accept", "application/json")
 	req.Header.Set("Authorization", "Bearer "+strings.TrimSpace(cfg.APIKey))
 	resp, err := c.http.Do(req)
 	if err != nil {
-		return nil, fmt.Errorf("获取模型列表失败: %w", err)
+		return nil, fmt.Errorf("%s: %w", i18n.T(lang, "获取模型列表失败", "Failed to fetch the model list"), err)
 	}
 	defer resp.Body.Close()
 	raw, _ := io.ReadAll(io.LimitReader(resp.Body, 4<<20))
@@ -79,11 +80,11 @@ func (c *Client) Models(ctx context.Context, cfg model.AIConfig) ([]string, erro
 		if message == "" {
 			message = resp.Status
 		}
-		return nil, fmt.Errorf("模型列表接口返回 %d: %s", resp.StatusCode, message)
+		return nil, fmt.Errorf("%s %d: %s", i18n.T(lang, "模型列表接口返回", "Model list endpoint returned"), resp.StatusCode, message)
 	}
 	ids := parseModelIDs(raw)
 	if len(ids) == 0 {
-		return nil, fmt.Errorf("接口没有返回模型列表")
+		return nil, fmt.Errorf("%s", i18n.T(lang, "接口没有返回模型列表", "The endpoint returned no models"))
 	}
 	return ids, nil
 }
@@ -145,18 +146,19 @@ func parseModelIDs(raw []byte) []string {
 }
 
 // Polish generates a weekly report from the local report and completed task tree.
-func (c *Client) Polish(ctx context.Context, cfg model.AIConfig, week *model.Week, report string) (string, error) {
-	prompt := WeeklyPrompt(week, report)
-	return c.complete(ctx, cfg, "你是一名严谨、务实的中文周报助手。", prompt, 1800)
+func (c *Client) Polish(ctx context.Context, cfg model.AIConfig, week *model.Week, report string, lang i18n.Language) (string, error) {
+	prompt := WeeklyPrompt(week, report, lang)
+	system := i18n.T(lang, "你是一名严谨、务实的中文周报助手。", "You are a rigorous and practical weekly report assistant.")
+	return c.complete(ctx, cfg, system, prompt, 1800, lang)
 }
 
 // Test performs a tiny completion to verify the endpoint and credentials.
-func (c *Client) Test(ctx context.Context, cfg model.AIConfig) (string, error) {
-	return c.complete(ctx, cfg, "你是连接测试助手。", "只回复 OK。", 8)
+func (c *Client) Test(ctx context.Context, cfg model.AIConfig, lang i18n.Language) (string, error) {
+	return c.complete(ctx, cfg, i18n.T(lang, "你是连接测试助手。", "You are a connection test assistant."), i18n.T(lang, "只回复 OK。", "Reply with OK only."), 8, lang)
 }
 
-func (c *Client) complete(ctx context.Context, cfg model.AIConfig, system, user string, maxTokens int) (string, error) {
-	if err := ValidateConfig(cfg); err != nil {
+func (c *Client) complete(ctx context.Context, cfg model.AIConfig, system, user string, maxTokens int, lang i18n.Language) (string, error) {
+	if err := ValidateConfig(cfg, lang); err != nil {
 		return "", err
 	}
 	endpoint := strings.TrimRight(strings.TrimSpace(cfg.BaseURL), "/")
@@ -179,13 +181,13 @@ func (c *Client) complete(ctx context.Context, cfg model.AIConfig, system, user 
 	}
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, endpoint, bytes.NewReader(payload))
 	if err != nil {
-		return "", fmt.Errorf("构建 AI 请求失败: %w", err)
+		return "", fmt.Errorf("%s: %w", i18n.T(lang, "构建 AI 请求失败", "Failed to build the AI request"), err)
 	}
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Authorization", "Bearer "+strings.TrimSpace(cfg.APIKey))
 	resp, err := c.http.Do(req)
 	if err != nil {
-		return "", fmt.Errorf("连接 AI 接口失败: %w", err)
+		return "", fmt.Errorf("%s: %w", i18n.T(lang, "连接 AI 接口失败", "Failed to connect to the AI endpoint"), err)
 	}
 	defer resp.Body.Close()
 	raw, _ := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
@@ -197,7 +199,7 @@ func (c *Client) complete(ctx context.Context, cfg model.AIConfig, system, user 
 		if message == "" {
 			message = resp.Status
 		}
-		return "", fmt.Errorf("AI 接口返回 %d: %s", resp.StatusCode, message)
+		return "", fmt.Errorf("%s %d: %s", i18n.T(lang, "AI 接口返回", "AI endpoint returned"), resp.StatusCode, message)
 	}
 	var parsed struct {
 		Choices []struct {
@@ -210,24 +212,40 @@ func (c *Client) complete(ctx context.Context, cfg model.AIConfig, system, user 
 		} `json:"error"`
 	}
 	if err := json.Unmarshal(raw, &parsed); err != nil {
-		return "", fmt.Errorf("解析 AI 响应失败: %w", err)
+		return "", fmt.Errorf("%s: %w", i18n.T(lang, "解析 AI 响应失败", "Failed to parse the AI response"), err)
 	}
 	if parsed.Error != nil && parsed.Error.Message != "" {
-		return "", fmt.Errorf("AI 接口返回错误: %s", parsed.Error.Message)
+		return "", fmt.Errorf("%s: %s", i18n.T(lang, "AI 接口返回错误", "AI endpoint error"), parsed.Error.Message)
 	}
 	if len(parsed.Choices) == 0 {
-		return "", fmt.Errorf("AI 接口没有返回内容")
+		return "", fmt.Errorf("%s", i18n.T(lang, "AI 接口没有返回内容", "The AI endpoint returned no content"))
 	}
 	content := strings.TrimSpace(parsed.Choices[0].Message.Content)
 	if content == "" {
-		return "", fmt.Errorf("AI 接口返回了空内容")
+		return "", fmt.Errorf("%s", i18n.T(lang, "AI 接口返回了空内容", "The AI endpoint returned empty content"))
 	}
 	return content, nil
 }
 
-// WeeklyPrompt builds the Chinese prompt used for report polishing.
-func WeeklyPrompt(week *model.Week, report string) string {
-	tree := truncate(todo.DoneText(week), 12000)
+// WeeklyPrompt builds the prompt used for report polishing in the selected language.
+func WeeklyPrompt(week *model.Week, report string, lang i18n.Language) string {
+	tree := truncate(todo.DoneText(week), 12000, lang)
+	if lang == i18n.En {
+		return fmt.Sprintf(`Generate a concise, factual English weekly report from the completed tasks below.
+
+Requirements:
+1. Use Markdown, 200-400 words.
+2. Group related work by theme. Do not list every task and do not invent anything.
+3. Keep key outcomes, numbers and important details.
+4. Output only the report body, without a preamble.
+
+Period: %s ~ %s (%s)
+Completed tasks (hierarchy):
+%s
+
+Local summary:
+%s`, week.Start, week.End, week.ID, tree, report)
+	}
 	return fmt.Sprintf(`请根据下面这一周的任务完成情况，生成一份简洁、专业、真实的中文周报。
 
 要求：
@@ -244,10 +262,10 @@ func WeeklyPrompt(week *model.Week, report string) string {
 %s`, week.Start, week.End, week.ID, tree, report)
 }
 
-func truncate(value string, limit int) string {
+func truncate(value string, limit int, lang i18n.Language) string {
 	if utf8.RuneCountInString(value) <= limit {
 		return value
 	}
 	runes := []rune(value)
-	return string(runes[:limit]) + "\n…（内容过长已截断）"
+	return string(runes[:limit]) + "\n" + i18n.T(lang, "…（内容过长已截断）", "… (truncated)")
 }
