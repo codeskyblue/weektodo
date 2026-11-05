@@ -44,7 +44,10 @@
 		if (event.key === 'Enter') {
 			event.preventDefault();
 			if (!task.text.trim()) {
-				input.blur();
+				// Enter on an empty nested task behaves like Shift+Tab,
+				// so users can exit a sub-list without leaving the keyboard.
+				if (row.parent) app.outdent(task.id);
+				else input.blur();
 				return;
 			}
 			app.addSibling(task.id);
