@@ -7,6 +7,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/uiautodev/weektodo/internal/model"
 	"github.com/uiautodev/weektodo/internal/webdav/webdavtest"
 )
 
@@ -299,5 +300,49 @@ func TestWebDAVSyncRejectsBrokenRemote(t *testing.T) {
 	stored, ok := dav.File("/weektodo.json")
 	if !ok || string(stored) != "{not json" {
 		t.Fatal("remote file must not be overwritten when parsing fails")
+	}
+}
+
+func TestWebDAVSyncKeepsCategoriesSeparate(t *testing.T) {
+	dav := newDAV(t)
+	ts, _ := newTestServer(t)
+	oss := createCategory(t, ts, "开源")
+	saveDAVSettings(t, ts, dav.URL(), "backup", "", "")
+	saveWeek(t, ts, "2026-W45", []map[string]any{{
+		"id": "work", "text": "工作", "status": "todo", "children": []any{},
+	}})
+	putTasks(t, ts, oss, "2026-W45", []map[string]any{{
+		"id": "oss", "text": "开源", "status": "todo", "children": []any{},
+	}})
+
+	status, raw := request(t, ts, http.MethodPost, "/api/webdav/sync", map[string]any{})
+	if status != http.StatusOK {
+		t.Fatalf("sync: %d %s", status, raw)
+	}
+	result := decodeMap(t, raw)
+	if result["categories"] != float64(2) || result["weeks"] != float64(2) || result["tasks"] != float64(2) {
+		t.Fatalf("sync result = %+v", result)
+	}
+
+	stored, ok := dav.File("/backup/weektodo.json")
+	if !ok {
+		t.Fatal("remote file missing")
+	}
+	var document struct {
+		Categories []map[string]any `json:"categories"`
+		Weeks      []map[string]any `json:"weeks"`
+	}
+	if err := json.Unmarshal(stored, &document); err != nil {
+		t.Fatal(err)
+	}
+	if len(document.Categories) != 2 || len(document.Weeks) != 2 {
+		t.Fatalf("remote document = %+v", document)
+	}
+	categories := map[string]bool{}
+	for _, week := range document.Weeks {
+		categories[week["category"].(string)] = true
+	}
+	if !categories[model.DefaultCategoryID] || !categories[oss] {
+		t.Fatalf("remote week categories = %+v", categories)
 	}
 }

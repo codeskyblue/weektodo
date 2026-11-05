@@ -1,6 +1,7 @@
 package store
 
 import (
+	"encoding/json"
 	"errors"
 	"os"
 	"path/filepath"
@@ -330,5 +331,105 @@ func TestMoveTaskErrors(t *testing.T) {
 	}
 	if _, ok := st.Week("2026-W46"); ok {
 		t.Fatal("failed move must not create an empty target week")
+	}
+}
+
+func TestCategoryIsolation(t *testing.T) {
+	st, err := New(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	categories := st.Categories()
+	if len(categories) != 1 || categories[0].ID != model.DefaultCategoryID {
+		t.Fatalf("default categories = %+v", categories)
+	}
+	oss, err := st.SaveCategory(model.Category{Name: "开源", Color: "#8b5cf6"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := st.SaveCategory(model.Category{Name: "开源"}); !errors.Is(err, ErrCategoryNameTaken) {
+		t.Fatalf("duplicate name err = %v", err)
+	}
+
+	now := time.Now()
+	work := &model.Week{ID: "2026-W45", Tasks: []*model.Task{{ID: "work-task", Text: "工作", Status: model.StatusTodo, Children: []*model.Task{}}}}
+	side := &model.Week{ID: "2026-W45", Tasks: []*model.Task{{ID: "oss-task", Text: "开源", Status: model.StatusTodo, Children: []*model.Task{}}}}
+	if _, err := st.SaveWeekInCategory(model.DefaultCategoryID, work); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := st.SaveWeekInCategory(oss.ID, side); err != nil {
+		t.Fatal(err)
+	}
+
+	workWeek, ok := st.WeekInCategory(model.DefaultCategoryID, "2026-W45")
+	if !ok || len(workWeek.Tasks) != 1 || workWeek.Tasks[0].ID != "work-task" {
+		t.Fatalf("work week = %+v, %v", workWeek, ok)
+	}
+	sideWeek, ok := st.WeekInCategory(oss.ID, "2026-W45")
+	if !ok || len(sideWeek.Tasks) != 1 || sideWeek.Tasks[0].ID != "oss-task" {
+		t.Fatalf("oss week = %+v, %v", sideWeek, ok)
+	}
+	if got := st.ListWeeksInCategory(oss.ID); len(got) != 1 {
+		t.Fatalf("oss summaries = %+v", got)
+	}
+
+	if _, _, err := st.MoveTaskInCategory(oss.ID, "2026-W45", "oss-task", "2026-W46", now); err != nil {
+		t.Fatal(err)
+	}
+	if week, ok := st.WeekInCategory(oss.ID, "2026-W46"); !ok || len(week.Tasks) != 1 {
+		t.Fatalf("oss target = %+v, %v", week, ok)
+	}
+	if week, ok := st.WeekInCategory(model.DefaultCategoryID, "2026-W46"); ok {
+		t.Fatalf("default category must not gain the moved task: %+v", week)
+	}
+	if week, _ := st.WeekInCategory(model.DefaultCategoryID, "2026-W45"); len(week.Tasks) != 1 {
+		t.Fatalf("default source changed: %+v", week)
+	}
+
+	if err := st.DeleteWeekInCategory(oss.ID, "2026-W45"); err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := st.WeekInCategory(oss.ID, "2026-W45"); ok {
+		t.Fatal("oss week was not deleted")
+	}
+	if _, ok := st.WeekInCategory(model.DefaultCategoryID, "2026-W45"); !ok {
+		t.Fatal("deleting an oss week must not touch the default category")
+	}
+}
+
+func TestCategoryMigration(t *testing.T) {
+	dir := t.TempDir()
+	legacy := `{"version":1,"weeks":[{"id":"2026-W45","start":"2026-11-02","end":"2026-11-08","tasks":[{"id":"a","text":"legacy","status":"todo","children":[]}]}]}`
+	if err := os.WriteFile(filepath.Join(dir, dataFileName), []byte(legacy), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	settings := `{"language":"en"}`
+	if err := os.WriteFile(filepath.Join(dir, settingsFileName), []byte(settings), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	st, err := New(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	categories := st.Categories()
+	if len(categories) != 1 || categories[0].ID != model.DefaultCategoryID || categories[0].Name != "Inbox" {
+		t.Fatalf("migrated categories = %+v", categories)
+	}
+	week, ok := st.WeekInCategory(model.DefaultCategoryID, "2026-W45")
+	if !ok || len(week.Tasks) != 1 || week.Tasks[0].Text != "legacy" {
+		t.Fatalf("migrated week = %+v, %v", week, ok)
+	}
+
+	raw, err := os.ReadFile(filepath.Join(dir, dataFileName))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var document model.Data
+	if err := json.Unmarshal(raw, &document); err != nil {
+		t.Fatal(err)
+	}
+	if document.Version != 2 || len(document.Categories) != 1 || document.Weeks[0].Category != model.DefaultCategoryID {
+		t.Fatalf("persisted migration = %+v", document)
 	}
 }

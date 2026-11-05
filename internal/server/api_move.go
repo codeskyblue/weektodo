@@ -16,6 +16,10 @@ func (s *Server) handleMoveTask(w http.ResponseWriter, r *http.Request) {
 	if !validWeekID(w, fromID) {
 		return
 	}
+	category, ok := s.requestCategory(w, r)
+	if !ok {
+		return
+	}
 	var body struct {
 		TaskID   string `json:"taskId"`
 		ToWeekID string `json:"toWeekId"`
@@ -40,7 +44,7 @@ func (s *Server) handleMoveTask(w http.ResponseWriter, r *http.Request) {
 	}
 
 	lang := responseLanguage(w)
-	from, to, err := s.store.MoveTask(fromID, body.TaskID, body.ToWeekID, time.Now())
+	from, to, err := s.store.MoveTaskInCategory(category, fromID, body.TaskID, body.ToWeekID, time.Now())
 	switch {
 	case errors.Is(err, store.ErrSameWeek):
 		writeError(w, http.StatusBadRequest, "invalid_move", i18n.T(lang,

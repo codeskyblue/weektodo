@@ -1,6 +1,8 @@
 package store
 
 import (
+	"crypto/rand"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -14,6 +16,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/uiautodev/weektodo/internal/i18n"
 	"github.com/uiautodev/weektodo/internal/model"
 	"github.com/uiautodev/weektodo/internal/todo"
 )
@@ -32,14 +35,19 @@ var (
 	ErrTaskNotFound = errors.New("task not found")
 	// ErrSameWeek is returned when source and target week are identical.
 	ErrSameWeek = errors.New("source and target week are the same")
+	// ErrCategoryNotFound is returned when a category does not exist.
+	ErrCategoryNotFound = errors.New("category not found")
+	// ErrCategoryNameTaken is returned when a category name is already used.
+	ErrCategoryNameTaken = errors.New("category name already exists")
 )
 
 // Store owns the JSON documents and serializes all access to them.
 type Store struct {
-	mu       sync.RWMutex
-	dir      string
-	data     model.Data
-	settings model.Settings
+	mu             sync.RWMutex
+	dir            string
+	data           model.Data
+	settings       model.Settings
+	needsMigration bool
 }
 
 // DefaultDir returns the platform data directory. WEEKTODO_DATA_DIR overrides it.
@@ -91,7 +99,44 @@ func New(dir string) (*Store, error) {
 	if err := s.loadSettings(); err != nil {
 		return nil, err
 	}
+	changed, err := s.ensureDefaults()
+	if err != nil {
+		return nil, err
+	}
+	if changed {
+		if err := s.saveDataLocked(); err != nil {
+			return nil, err
+		}
+	}
 	return s, nil
+}
+
+func (s *Store) ensureDefaults() (bool, error) {
+	changed := s.needsMigration
+	s.needsMigration = false
+	now := time.Now()
+	if s.data.Categories == nil {
+		s.data.Categories = []*model.Category{}
+		changed = true
+	}
+	for _, category := range s.data.Categories {
+		if err := todo.NormalizeCategory(category, now); err != nil {
+			return false, err
+		}
+	}
+	name := "默认"
+	if i18n.Normalize(s.settings.Language) == i18n.En {
+		name = "Inbox"
+	}
+	if todo.EnsureDefaultCategory(&s.data, name, now) {
+		changed = true
+	}
+	if s.data.Version != 2 {
+		s.data.Version = 2
+		changed = true
+	}
+	todo.SortCategories(s.data.Categories)
+	return changed, nil
 }
 
 // legacyDirs lists directories used by earlier versions.
@@ -188,9 +233,24 @@ func (s *Store) Snapshot() model.Data {
 func (s *Store) ReplaceData(data model.Data) (model.Data, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	now := time.Now()
 	next := todo.CloneData(data)
-	if next.Version == 0 {
-		next.Version = 1
+	next.Version = 2
+	if next.Categories == nil {
+		next.Categories = []*model.Category{}
+	}
+	for _, category := range next.Categories {
+		if category == nil {
+			continue
+		}
+		if err := todo.NormalizeCategory(category, now); err != nil {
+			return model.Data{}, err
+		}
+	}
+	if todo.EnsureDefaultCategory(&next, "默认", now) {
+		// ReplaceData is also used after WebDAV merges, where the default
+		// category should already exist. Keep a safe fallback.
+		sort.Slice(next.Categories, func(i, j int) bool { return next.Categories[i].Order < next.Categories[j].Order })
 	}
 	if next.Weeks == nil {
 		next.Weeks = []*model.Week{}
@@ -199,11 +259,25 @@ func (s *Store) ReplaceData(data model.Data) (model.Data, error) {
 		if week == nil {
 			continue
 		}
-		if err := todo.NormalizeWeek(week, time.Now()); err != nil {
+		if week.Category == "" {
+			week.Category = model.DefaultCategoryID
+		}
+		if err := todo.NormalizeWeek(week, now); err != nil {
 			return model.Data{}, err
 		}
 	}
-	sort.Slice(next.Weeks, func(i, j int) bool { return next.Weeks[i].Start < next.Weeks[j].Start })
+	sort.Slice(next.Categories, func(i, j int) bool {
+		if next.Categories[i].Order != next.Categories[j].Order {
+			return next.Categories[i].Order < next.Categories[j].Order
+		}
+		return next.Categories[i].Name < next.Categories[j].Name
+	})
+	sort.Slice(next.Weeks, func(i, j int) bool {
+		if next.Weeks[i].Category != next.Weeks[j].Category {
+			return next.Weeks[i].Category < next.Weeks[j].Category
+		}
+		return next.Weeks[i].Start < next.Weeks[j].Start
+	})
 	s.data = next
 	if err := s.saveDataLocked(); err != nil {
 		return model.Data{}, err
@@ -211,36 +285,157 @@ func (s *Store) ReplaceData(data model.Data) (model.Data, error) {
 	return todo.CloneData(next), nil
 }
 
-// Week returns one week by id.
-func (s *Store) Week(id string) (*model.Week, bool) {
+// Categories returns all categories, including archived ones.
+func (s *Store) Categories() []model.Category {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
-	return s.weekLocked(id)
+	out := make([]model.Category, 0, len(s.data.Categories))
+	for _, category := range s.data.Categories {
+		if category == nil {
+			continue
+		}
+		out = append(out, *category)
+	}
+	return out
 }
 
-func (s *Store) weekLocked(id string) (*model.Week, bool) {
+// Category returns one category by id.
+func (s *Store) Category(id string) (model.Category, bool) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	category := s.categoryLocked(id)
+	if category == nil {
+		return model.Category{}, false
+	}
+	return *category, true
+}
+
+func (s *Store) categoryLocked(id string) *model.Category {
+	for _, category := range s.data.Categories {
+		if category != nil && category.ID == id {
+			return category
+		}
+	}
+	return nil
+}
+
+// SaveCategory creates a category when ID is empty, otherwise updates it.
+func (s *Store) SaveCategory(next model.Category) (model.Category, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	next.ID = strings.TrimSpace(next.ID)
+	next.Name = strings.TrimSpace(next.Name)
+	if next.Name == "" {
+		return model.Category{}, fmt.Errorf("category name cannot be empty")
+	}
+	now := time.Now()
+	index := -1
+	for i, category := range s.data.Categories {
+		if category != nil && category.ID == next.ID {
+			index = i
+			break
+		}
+	}
+	if next.ID != "" && index < 0 {
+		return model.Category{}, ErrCategoryNotFound
+	}
+	if index < 0 {
+		ids := map[string]bool{}
+		for _, category := range s.data.Categories {
+			ids[category.ID] = true
+		}
+		next.ID = newCategoryID(ids)
+		if next.Order == 0 {
+			next.Order = len(s.data.Categories)
+		}
+		next.CreatedAt = now.Format(time.RFC3339)
+	} else {
+		next.CreatedAt = s.data.Categories[index].CreatedAt
+	}
+	next.UpdatedAt = now.Format(time.RFC3339)
+	for i, category := range s.data.Categories {
+		if i == index || category == nil {
+			continue
+		}
+		if strings.EqualFold(category.Name, next.Name) {
+			return model.Category{}, ErrCategoryNameTaken
+		}
+	}
+	if err := todo.NormalizeCategory(&next, now); err != nil {
+		return model.Category{}, err
+	}
+	if index >= 0 {
+		s.data.Categories[index] = &next
+	} else {
+		s.data.Categories = append(s.data.Categories, &next)
+	}
+	todo.SortCategories(s.data.Categories)
+	if err := s.saveDataLocked(); err != nil {
+		return model.Category{}, err
+	}
+	return next, nil
+}
+
+func newCategoryID(existing map[string]bool) string {
+	for {
+		var buffer [6]byte
+		if _, err := rand.Read(buffer[:]); err != nil {
+			return fmt.Sprintf("c_%d", time.Now().UnixNano())
+		}
+		id := "c_" + hex.EncodeToString(buffer[:])
+		if !existing[id] {
+			return id
+		}
+	}
+}
+
+// Week returns one week by id in the default category.
+func (s *Store) Week(id string) (*model.Week, bool) {
+	return s.WeekInCategory(model.DefaultCategoryID, id)
+}
+
+// WeekInCategory returns one week by category and id.
+func (s *Store) WeekInCategory(category, id string) (*model.Week, bool) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.weekLocked(category, id)
+}
+
+func (s *Store) weekLocked(category, id string) (*model.Week, bool) {
 	for _, week := range s.data.Weeks {
-		if week.ID == id {
+		if week != nil && week.Category == category && week.ID == id {
 			return todo.CloneWeek(week), true
 		}
 	}
 	return nil, false
 }
 
-// MoveTask moves one task subtree to another week and persists both changes
-// in a single write. The target week is created when it does not exist yet.
+// MoveTask moves a task between weeks in the default category.
 func (s *Store) MoveTask(fromID, taskID, toID string, now time.Time) (*model.Week, *model.Week, error) {
+	return s.MoveTaskInCategory(model.DefaultCategoryID, fromID, taskID, toID, now)
+}
+
+// MoveTaskInCategory moves one task subtree to another week in the same
+// category and persists both changes in a single write.
+func (s *Store) MoveTaskInCategory(category, fromID, taskID, toID string, now time.Time) (*model.Week, *model.Week, error) {
 	if fromID == toID {
 		return nil, nil, ErrSameWeek
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	fromIndex := s.weekIndexLocked(fromID)
+	category = strings.TrimSpace(category)
+	if category == "" {
+		category = model.DefaultCategoryID
+	}
+	if s.categoryLocked(category) == nil {
+		return nil, nil, ErrCategoryNotFound
+	}
+	fromIndex := s.weekIndexLocked(category, fromID)
 	if fromIndex < 0 {
 		return nil, nil, ErrWeekNotFound
 	}
-	toIndex := s.weekIndexLocked(toID)
+	toIndex := s.weekIndexLocked(category, toID)
 
 	from := todo.CloneWeek(s.data.Weeks[fromIndex])
 	var to *model.Week
@@ -253,6 +448,8 @@ func (s *Store) MoveTask(fromID, taskID, toID string, now time.Time) (*model.Wee
 		}
 		to = created
 	}
+	from.Category = category
+	to.Category = category
 
 	remaining, task, ok := todo.TakeTask(from.Tasks, taskID)
 	if !ok {
@@ -274,28 +471,45 @@ func (s *Store) MoveTask(fromID, taskID, toID string, now time.Time) (*model.Wee
 	} else {
 		s.data.Weeks = append(s.data.Weeks, to)
 	}
-	sort.Slice(s.data.Weeks, func(i, j int) bool { return s.data.Weeks[i].Start < s.data.Weeks[j].Start })
+	s.sortWeeksLocked()
 	if err := s.saveDataLocked(); err != nil {
 		return nil, nil, err
 	}
 	return todo.CloneWeek(from), todo.CloneWeek(to), nil
 }
 
-func (s *Store) weekIndexLocked(id string) int {
+func (s *Store) weekIndexLocked(category, id string) int {
 	for index, week := range s.data.Weeks {
-		if week != nil && week.ID == id {
+		if week != nil && week.Category == category && week.ID == id {
 			return index
 		}
 	}
 	return -1
 }
 
-// ListWeeks returns summaries sorted by start date.
+func (s *Store) sortWeeksLocked() {
+	sort.Slice(s.data.Weeks, func(i, j int) bool {
+		if s.data.Weeks[i].Category != s.data.Weeks[j].Category {
+			return s.data.Weeks[i].Category < s.data.Weeks[j].Category
+		}
+		return s.data.Weeks[i].Start < s.data.Weeks[j].Start
+	})
+}
+
+// ListWeeks returns default-category summaries sorted by start date.
 func (s *Store) ListWeeks() []model.WeekSummary {
+	return s.ListWeeksInCategory(model.DefaultCategoryID)
+}
+
+// ListWeeksInCategory returns summaries for one category.
+func (s *Store) ListWeeksInCategory(category string) []model.WeekSummary {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
-	out := make([]model.WeekSummary, 0, len(s.data.Weeks))
+	out := make([]model.WeekSummary, 0)
 	for _, week := range s.data.Weeks {
+		if week == nil || week.Category != category {
+			continue
+		}
 		stats := todo.WeekStats(week)
 		out = append(out, model.WeekSummary{
 			ID:        week.ID,
@@ -311,17 +525,30 @@ func (s *Store) ListWeeks() []model.WeekSummary {
 	return out
 }
 
-// SaveWeek validates and persists a week.
+// SaveWeek validates and persists a week in the default category.
 func (s *Store) SaveWeek(week *model.Week) (*model.Week, error) {
+	return s.SaveWeekInCategory(model.DefaultCategoryID, week)
+}
+
+// SaveWeekInCategory validates and persists a week inside a category.
+func (s *Store) SaveWeekInCategory(category string, week *model.Week) (*model.Week, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	category = strings.TrimSpace(category)
+	if category == "" {
+		category = model.DefaultCategoryID
+	}
+	if s.categoryLocked(category) == nil {
+		return nil, ErrCategoryNotFound
+	}
 	clone := todo.CloneWeek(week)
+	clone.Category = category
 	if err := todo.NormalizeWeek(clone, time.Now()); err != nil {
 		return nil, err
 	}
 	replaced := false
 	for i, existing := range s.data.Weeks {
-		if existing.ID == clone.ID {
+		if existing.Category == category && existing.ID == clone.ID {
 			s.data.Weeks[i] = clone
 			replaced = true
 			break
@@ -330,21 +557,26 @@ func (s *Store) SaveWeek(week *model.Week) (*model.Week, error) {
 	if !replaced {
 		s.data.Weeks = append(s.data.Weeks, clone)
 	}
-	sort.Slice(s.data.Weeks, func(i, j int) bool { return s.data.Weeks[i].Start < s.data.Weeks[j].Start })
+	s.sortWeeksLocked()
 	if err := s.saveDataLocked(); err != nil {
 		return nil, err
 	}
 	return todo.CloneWeek(clone), nil
 }
 
-// DeleteWeek removes a week.
+// DeleteWeek removes a default-category week.
 func (s *Store) DeleteWeek(id string) error {
+	return s.DeleteWeekInCategory(model.DefaultCategoryID, id)
+}
+
+// DeleteWeekInCategory removes one week from a category.
+func (s *Store) DeleteWeekInCategory(category, id string) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	next := s.data.Weeks[:0]
+	next := make([]*model.Week, 0, len(s.data.Weeks))
 	found := false
 	for _, week := range s.data.Weeks {
-		if week.ID == id {
+		if week.Category == category && week.ID == id {
 			found = true
 			continue
 		}
@@ -357,11 +589,25 @@ func (s *Store) DeleteWeek(id string) error {
 	return s.saveDataLocked()
 }
 
-// TodayCount returns the number of unfinished tasks scheduled for now's date.
+// TodayCount returns unfinished tasks for today across all categories.
 func (s *Store) TodayCount(now time.Time) int {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
-	week, ok := s.weekLocked(todo.WeekIDFor(now))
+	total := 0
+	for _, category := range s.data.Categories {
+		week, ok := s.weekLocked(category.ID, todo.WeekIDFor(now))
+		if ok {
+			total += todo.TodayCount(week, todo.DateString(now))
+		}
+	}
+	return total
+}
+
+// TodayCountInCategory returns unfinished tasks for today in one category.
+func (s *Store) TodayCountInCategory(category string, now time.Time) int {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	week, ok := s.weekLocked(category, todo.WeekIDFor(now))
 	if !ok {
 		return 0
 	}
@@ -387,6 +633,18 @@ func (s *Store) UpdateSettings(next model.Settings) error {
 	next.WebDAV.Password = strings.TrimSpace(next.WebDAV.Password)
 	next.WebDAV.RemoteDir = normalizeRemoteDir(next.WebDAV.RemoteDir)
 	next.WeekSpan = normalizeWeekSpan(next.WeekSpan)
+	next.ActiveCategory = strings.TrimSpace(next.ActiveCategory)
+	if next.CategoryWeeks != nil {
+		weeks := map[string]string{}
+		for id, weekID := range next.CategoryWeeks {
+			id = strings.TrimSpace(id)
+			weekID = strings.TrimSpace(weekID)
+			if id != "" && weekID != "" {
+				weeks[id] = weekID
+			}
+		}
+		next.CategoryWeeks = weeks
+	}
 	s.settings = next
 	return s.saveSettingsLocked()
 }
@@ -395,7 +653,8 @@ func (s *Store) loadData() error {
 	path := filepath.Join(s.dir, dataFileName)
 	data, err := os.ReadFile(path)
 	if errors.Is(err, os.ErrNotExist) {
-		s.data = model.Data{Version: 1, Weeks: []*model.Week{}}
+		s.data = model.Data{Version: 2, Categories: []*model.Category{}, Weeks: []*model.Week{}}
+		s.needsMigration = true
 		return nil
 	}
 	if err != nil {
@@ -411,8 +670,26 @@ func (s *Store) loadData() error {
 		}
 		return fmt.Errorf("parse %s: %w", path, err)
 	}
+	migrated := parsed.Version < 2
 	if parsed.Version == 0 {
 		parsed.Version = 1
+	}
+	if parsed.Categories == nil {
+		parsed.Categories = []*model.Category{}
+		migrated = true
+	}
+	seenCategories := map[string]bool{}
+	for _, category := range parsed.Categories {
+		if category == nil {
+			return fmt.Errorf("parse %s: null category", path)
+		}
+		if err := todo.NormalizeCategory(category, time.Now()); err != nil {
+			return fmt.Errorf("normalize category %s: %w", category.ID, err)
+		}
+		if seenCategories[category.ID] {
+			return fmt.Errorf("parse %s: duplicate category %s", path, category.ID)
+		}
+		seenCategories[category.ID] = true
 	}
 	if parsed.Weeks == nil {
 		parsed.Weeks = []*model.Week{}
@@ -422,16 +699,29 @@ func (s *Store) loadData() error {
 		if week == nil {
 			return fmt.Errorf("parse %s: null week", path)
 		}
-		if seen[week.ID] {
-			return fmt.Errorf("parse %s: duplicate week %s", path, week.ID)
+		week.Category = strings.TrimSpace(week.Category)
+		if week.Category == "" {
+			week.Category = model.DefaultCategoryID
+			migrated = true
 		}
-		seen[week.ID] = true
+		key := week.Category + "\x00" + week.ID
+		if seen[key] {
+			return fmt.Errorf("parse %s: duplicate week %s in category %s", path, week.ID, week.Category)
+		}
+		seen[key] = true
 		if err := todo.NormalizeWeek(week, time.Now()); err != nil {
 			return fmt.Errorf("normalize week %s: %w", week.ID, err)
 		}
 	}
-	sort.Slice(parsed.Weeks, func(i, j int) bool { return parsed.Weeks[i].Start < parsed.Weeks[j].Start })
+	parsed.Version = 2
+	sort.Slice(parsed.Weeks, func(i, j int) bool {
+		if parsed.Weeks[i].Category != parsed.Weeks[j].Category {
+			return parsed.Weeks[i].Category < parsed.Weeks[j].Category
+		}
+		return parsed.Weeks[i].Start < parsed.Weeks[j].Start
+	})
 	s.data = parsed
+	s.needsMigration = migrated
 	return nil
 }
 

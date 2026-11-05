@@ -1,6 +1,7 @@
 import { i18n, t } from './i18n.svelte';
 import type {
 	CarryPreview,
+	Category,
 	CarryResult,
 	Meta,
 	ReportMode,
@@ -55,25 +56,60 @@ export function getMeta(): Promise<Meta> {
 	return request('/meta');
 }
 
-export function listWeeks(): Promise<{ currentWeekId: string; weeks: WeekSummary[] }> {
-	return request('/weeks');
+function withCategory(path: string, category: string): string {
+	const separator = path.includes('?') ? '&' : '?';
+	return `${path}${separator}category=${encodeURIComponent(category)}`;
 }
 
-export function createWeek(id: string): Promise<{ week: Week }> {
-	return request(`/weeks/${encodeURIComponent(id)}`, { method: 'POST' });
+export function listCategories(): Promise<{ categories: Category[] }> {
+	return request('/categories');
 }
 
-export function saveWeek(id: string, tasks: Task[]): Promise<{ week: Week }> {
-	return request(`/weeks/${encodeURIComponent(id)}`, {
+export function createCategory(name: string, color: string): Promise<{ category: Category }> {
+	return request('/categories', {
+		method: 'POST',
+		body: JSON.stringify({ name, color })
+	});
+}
+
+export interface CategoryDraft {
+	name?: string;
+	color?: string;
+	order?: number;
+	archived?: boolean;
+}
+
+export function updateCategory(
+	id: string,
+	draft: CategoryDraft
+): Promise<{ category: Category }> {
+	return request(`/categories/${encodeURIComponent(id)}`, {
+		method: 'PUT',
+		body: JSON.stringify(draft)
+	});
+}
+
+export function listWeeks(
+	category: string
+): Promise<{ currentWeekId: string; category: string; weeks: WeekSummary[] }> {
+	return request(withCategory('/weeks', category));
+}
+
+export function createWeek(category: string, id: string): Promise<{ week: Week }> {
+	return request(withCategory(`/weeks/${encodeURIComponent(id)}`, category), { method: 'POST' });
+}
+
+export function saveWeek(category: string, id: string, tasks: Task[]): Promise<{ week: Week }> {
+	return request(withCategory(`/weeks/${encodeURIComponent(id)}`, category), {
 		method: 'PUT',
 		body: JSON.stringify({ tasks })
 	});
 }
 
-export async function getWeekOrNull(id: string): Promise<Week | null> {
+export async function getWeekOrNull(category: string, id: string): Promise<Week | null> {
 	try {
 		const response = await request<{ week: Week | null }>(
-			`/weeks/${encodeURIComponent(id)}?optional=1`
+			withCategory(`/weeks/${encodeURIComponent(id)}?optional=1`, category)
 		);
 		return response.week;
 	} catch (error) {
@@ -83,33 +119,46 @@ export async function getWeekOrNull(id: string): Promise<Week | null> {
 }
 
 export function moveTask(
+	category: string,
 	fromWeekId: string,
 	taskId: string,
 	toWeekId: string
 ): Promise<{ from: Week; to: Week }> {
-	return request(`/weeks/${encodeURIComponent(fromWeekId)}/move`, {
+	return request(withCategory(`/weeks/${encodeURIComponent(fromWeekId)}/move`, category), {
 		method: 'POST',
 		body: JSON.stringify({ taskId, toWeekId })
 	});
 }
 
-export function carryPreview(id: string): Promise<CarryPreview> {
-	return request(`/weeks/${encodeURIComponent(id)}/carry-over`);
+export function carryPreview(category: string, id: string): Promise<CarryPreview> {
+	return request(withCategory(`/weeks/${encodeURIComponent(id)}/carry-over`, category));
 }
 
-export function carryOver(id: string): Promise<CarryResult> {
-	return request(`/weeks/${encodeURIComponent(id)}/carry-over`, { method: 'POST' });
+export function carryOver(category: string, id: string): Promise<CarryResult> {
+	return request(withCategory(`/weeks/${encodeURIComponent(id)}/carry-over`, category), {
+		method: 'POST'
+	});
 }
 
-export function getReport(id: string, mode: ReportMode): Promise<ReportResponse> {
-	return request(`/weeks/${encodeURIComponent(id)}/report?mode=${mode}&lang=${i18n.language}`);
+export function getReport(
+	category: string,
+	id: string,
+	mode: ReportMode
+): Promise<ReportResponse> {
+	return request(
+		withCategory(
+			`/weeks/${encodeURIComponent(id)}/report?mode=${mode}&lang=${i18n.language}`,
+			category
+		)
+	);
 }
 
 export function polishReport(
+	category: string,
 	id: string,
 	mode: ReportMode
 ): Promise<{ markdown: string; mode: ReportMode }> {
-	return request(`/weeks/${encodeURIComponent(id)}/report/polish`, {
+	return request(withCategory(`/weeks/${encodeURIComponent(id)}/report/polish`, category), {
 		method: 'POST',
 		body: JSON.stringify({ mode, lang: i18n.language })
 	});
@@ -219,5 +268,15 @@ export function saveWeekSpan(weekSpan: 1 | 2 | 3): Promise<SettingsPublic> {
 	return request('/settings', {
 		method: 'PUT',
 		body: JSON.stringify({ weekSpan })
+	});
+}
+
+export function saveCategoryState(
+	activeCategory: string,
+	categoryWeeks: Record<string, string>
+): Promise<SettingsPublic> {
+	return request('/settings', {
+		method: 'PUT',
+		body: JSON.stringify({ activeCategory, categoryWeeks })
 	});
 }

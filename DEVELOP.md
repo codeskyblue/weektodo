@@ -57,7 +57,10 @@ WEEKTODO_DATA_DIR=/tmp/weektodo-dev make dev
 |---|---|---|
 | GET | `/api/health` | 健康检查 |
 | GET | `/api/meta` | 数据目录、版本、当前周 |
-| GET | `/api/weeks` | 周列表 |
+| GET | `/api/categories` | 分类列表 |
+| POST | `/api/categories` | 新建分类 |
+| PUT | `/api/categories/{id}` | 改名、颜色、排序、归档 |
+| GET | `/api/weeks?category=...` | 分类下的周列表 |
 | GET | `/api/weeks/{id}` | 读取一周，`?optional=1` 时不存在返回 `week: null` |
 | POST | `/api/weeks/{id}` | 创建空周 |
 | PUT | `/api/weeks/{id}` | 保存整周任务树 |
@@ -74,7 +77,7 @@ WEEKTODO_DATA_DIR=/tmp/weektodo-dev make dev
 | POST | `/api/update/apply` | 下载并安装更新 |
 | GET | `/api/update/status` | 下载/安装进度 |
 
-周 ID 使用 ISO 周格式，例如 `2026-W45`。每天首次保存前会把当前 `data.json`
+所有周接口都接受 `category` 查询参数；省略时使用 `default`。分类不存在或已归档会返回 404。周的唯一键是 `(category, id)`，同一个周 ID 可以存在于多个分类。每天首次保存前会把当前 `data.json`
 复制到 `backups/data-YYYY-MM-DD.json`，只保留最近 14 份。
 
 ## 数据与状态规则
@@ -142,6 +145,16 @@ Release Notes 由 `scripts/release-notes.sh` 从上一个 tag 到当前 tag 的�
 ```bash
 ./scripts/release-notes.sh v0.2.0
 ```
+
+## 分类空间
+
+- `data.json` version 2 增加 `categories` 和 `Week.Category`；分类元数据随数据一起通过 WebDAV 同步。
+- 旧数据加载时自动创建 `default` 分类（中文「默认」、英文「Inbox」），所有旧周归入该分类，并原子写回 version 2。
+- `Store` 的周操作以 `(category, weekId)` 为键；跨分类读取、保存、带入、周报、移动都会拒绝。
+- 分类只支持归档，不硬删除，避免 WebDAV 没有删除墓碑时又从远端恢复。
+- 分类合并按 ID 和 `updatedAt` 进行；归档状态、名称、颜色取较新的一侧。
+- `/api/settings` 保存 `activeCategory` 和 `categoryWeeks`，前者记住当前空间，后者记住每个分类最后浏览的周。
+- 托盘计数使用当前分类。
 
 ## 多周视图
 

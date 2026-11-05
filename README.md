@@ -8,6 +8,7 @@
 
 ## 功能
 
+- **分类空间**：工作、开源、生活等分类完全独立，每个分类有自己的周计划、任务、进度和周报；顶部随时切换。
 - **按周记录**：周一到周日一个任务清单，任务可以标记具体日期，支持「今天 / 未完成 / 已完成 / 已废弃」筛选。
 - **层级任务**：任意嵌套的子任务，行首按 Tab 变成上一条的同级子任务，Shift+Tab 提升。
 - **父子联动**：子任务全部完成时父任务自动完成；父任务还有未完成子任务时点击复选框会弹确认，确认后一起勾选；取消父任务会连同子任务一起取消。
@@ -110,10 +111,28 @@ WEEKTODO_UPDATE_API=...
 默认目录：`~/.config/weektodo/`（macOS / Linux），Windows 使用 `%AppData%\weektodo\`。
 
 ```text
-data.json          所有周的任务
-settings.json      AI 配置（权限 0600）
+data.json          分类和所有周的任务
+settings.json      AI、WebDAV、界面偏好（权限 0600）
 backups/           每天首次保存前的自动备份，保留 14 天
 ```
+
+`data.json` 的 version 2 结构：
+
+```json
+{
+  "version": 2,
+  "categories": [
+    { "id": "default", "name": "默认", "color": "#3b82f6" }
+  ],
+  "weeks": [
+    { "id": "2026-W45", "category": "default", "tasks": [] }
+  ]
+}
+```
+
+周由 `(category, id)` 唯一标识，因此同一个 `2026-W45` 可以同时存在于多个分类。旧版 `data.json` 会自动归入「默认」分类。
+
+> version 2 数据结构不兼容旧版 WeekTodo：旧版会把不同分类里的同名周误判为重复周。升级前请保留备份。
 
 `data.json` 是普通 JSON，可以直接备份或版本管理。开发时可以用 `WEEKTODO_DATA_DIR` 覆盖目录。
 

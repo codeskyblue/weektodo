@@ -56,6 +56,7 @@
 	const sections = [
 		{ id: 'ai', label: 'AI 周报润色' },
 		{ id: 'webdav', label: 'WebDAV 同步' },
+		{ id: 'categories', label: '分类' },
 		{ id: 'appearance', label: '外观' },
 		{ id: 'language', label: '语言' },
 		{ id: 'update', label: '应用更新' },
@@ -63,6 +64,59 @@
 	] as const;
 	type Section = (typeof sections)[number]['id'];
 	let section = $state<Section>('ai');
+
+	const categoryColors = ['#3b82f6', '#8b5cf6', '#22c55e', '#f59e0b', '#f43f5e', '#64748b'];
+	type CategoryDraft = {
+		id: string;
+		name: string;
+		color: string;
+		order: number;
+		archived: boolean;
+	};
+	let categoryDrafts = $state<CategoryDraft[]>([]);
+	let newCategoryName = $state('');
+	let newCategoryColor = $state(categoryColors[0]);
+
+	$effect(() => {
+		categoryDrafts = app.categories.map((category) => ({
+			id: category.id,
+			name: category.name,
+			color: category.color || categoryColors[0],
+			order: category.order,
+			archived: category.archived
+		}));
+	});
+
+	async function saveCategoryDraft(draft: CategoryDraft): Promise<void> {
+		const ok = await app.saveCategory(draft.id, {
+			name: draft.name,
+			color: draft.color,
+			order: draft.order,
+			archived: draft.archived
+		});
+		if (ok) toast.success(t('分类已保存'));
+	}
+
+	async function toggleCategoryArchive(draft: CategoryDraft): Promise<void> {
+		const ok = await app.saveCategory(draft.id, {
+			name: draft.name,
+			color: draft.color,
+			order: draft.order,
+			archived: !draft.archived
+		});
+		if (ok) toast.success(draft.archived ? t('分类已恢复') : t('分类已归档'));
+	}
+
+	async function addCategory(): Promise<void> {
+		const name = newCategoryName.trim();
+		if (!name) return;
+		const ok = await app.saveCategory(null, { name, color: newCategoryColor });
+		if (ok) {
+			newCategoryName = '';
+			newCategoryColor = categoryColors[0];
+			toast.success(t('分类已创建'));
+		}
+	}
 
 	$effect(() => {
 		if (davPasswordInput) davPasswordInput.type = 'pass' + 'word';
@@ -325,7 +379,7 @@
 	<Dialog.Content class="max-h-[88vh] sm:max-w-3xl">
 		<Dialog.Header>
 			<Dialog.Title>{t('设置')}</Dialog.Title>
-			<Dialog.Description>{t('配置 AI 周报润色、WebDAV 同步和界面外观。')}</Dialog.Description>
+			<Dialog.Description>{t('配置 AI 周报润色、WebDAV 同步、分类和界面外观。')}</Dialog.Description>
 		</Dialog.Header>
 
 		<div class="grid gap-4 py-1 md:grid-cols-[10.5rem_1fr] md:gap-6">
@@ -582,6 +636,92 @@
 				</p>
 			</section>
 
+			{/if}
+
+			{#if section === 'categories'}
+			<section class="space-y-3">
+				<div>
+					<h3 class="text-sm font-medium">{t('分类')}</h3>
+					<p class="mt-0.5 text-xs text-muted-foreground">
+						{t('每个分类是独立的工作空间，任务、周报和带入互不混合。')}
+					</p>
+				</div>
+
+				<div class="space-y-2">
+					{#each categoryDrafts as draft (draft.id)}
+						<div class="rounded-lg border p-3" class:opacity-60={draft.archived}>
+							<div class="flex items-center gap-2">
+								<span
+									class="size-3 shrink-0 rounded-full"
+									style={`background-color: ${draft.color}`}
+								></span>
+								<Input
+									bind:value={draft.name}
+									class="h-8 flex-1"
+									aria-label={t('分类名称')}
+									maxlength={40}
+								/>
+								<Button
+									variant="ghost"
+									size="xs"
+									onclick={() => toggleCategoryArchive(draft)}
+								>
+									{draft.archived ? t('恢复') : t('归档')}
+								</Button>
+								<Button variant="outline" size="xs" onclick={() => saveCategoryDraft(draft)}>
+									{t('保存')}
+								</Button>
+							</div>
+							<div class="mt-2 flex items-center gap-1.5">
+								<span class="text-xs text-muted-foreground">{t('颜色')}</span>
+								{#each categoryColors as color (color)}
+									<button
+										type="button"
+										class="size-5 rounded-full border-2 transition-transform hover:scale-110"
+										class:border-foreground={draft.color === color}
+										class:border-transparent={draft.color !== color}
+										style={`background-color: ${color}`}
+										aria-label={color}
+										onclick={() => (draft.color = color)}
+									></button>
+								{/each}
+								{#if draft.archived}
+									<span class="ml-auto text-xs text-muted-foreground">{t('已归档')}</span>
+								{/if}
+							</div>
+						</div>
+					{/each}
+				</div>
+
+				<div class="space-y-2 rounded-lg border border-dashed p-3">
+					<div class="text-sm font-medium">{t('新建分类')}</div>
+					<div class="flex gap-2">
+						<Input
+							bind:value={newCategoryName}
+							placeholder={t('分类名称')}
+							class="h-8 flex-1"
+							maxlength={40}
+						/>
+						<Button size="sm" disabled={!newCategoryName.trim()} onclick={addCategory}>
+							{t('添加')}
+						</Button>
+					</div>
+					<div class="flex items-center gap-1.5">
+						<span class="text-xs text-muted-foreground">{t('颜色')}</span>
+						{#each categoryColors as color (color)}
+							<button
+								type="button"
+								class="size-5 rounded-full border-2 transition-transform hover:scale-110"
+								class:border-foreground={newCategoryColor === color}
+								class:border-transparent={newCategoryColor !== color}
+								style={`background-color: ${color}`}
+								aria-label={color}
+								onclick={() => (newCategoryColor = color)}
+							></button>
+						{/each}
+					</div>
+				</div>
+			</section>
 			{/if}
 
 			{#if section === 'appearance'}

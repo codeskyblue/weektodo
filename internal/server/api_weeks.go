@@ -21,12 +21,16 @@ func (s *Server) handleCarryPreview(w http.ResponseWriter, r *http.Request) {
 	if !validWeekID(w, id) {
 		return
 	}
+	category, ok := s.requestCategory(w, r)
+	if !ok {
+		return
+	}
 	sourceID := todo.PreviousWeekID(id)
 	if sourceID == "" {
 		writeError(w, http.StatusBadRequest, "invalid_week", "无法计算上一周")
 		return
 	}
-	source, ok := s.store.Week(sourceID)
+	source, ok := s.store.WeekInCategory(category, sourceID)
 	if !ok {
 		writeJSON(w, http.StatusOK, map[string]any{
 			"sourceWeekId": sourceID,
@@ -37,7 +41,7 @@ func (s *Server) handleCarryPreview(w http.ResponseWriter, r *http.Request) {
 		})
 		return
 	}
-	target, _ := s.store.Week(id)
+	target, _ := s.store.WeekInCategory(category, id)
 	if target == nil {
 		target = &model.Week{ID: id, Tasks: []*model.Task{}}
 	}
@@ -64,12 +68,16 @@ func (s *Server) handleCarry(w http.ResponseWriter, r *http.Request) {
 	if !validWeekID(w, id) {
 		return
 	}
+	category, ok := s.requestCategory(w, r)
+	if !ok {
+		return
+	}
 	sourceID := todo.PreviousWeekID(id)
 	if sourceID == "" {
 		writeError(w, http.StatusBadRequest, "invalid_week", "无法计算上一周")
 		return
 	}
-	target, exists := s.store.Week(id)
+	target, exists := s.store.WeekInCategory(category, id)
 	if !exists {
 		fresh, err := todo.NewWeek(id, time.Now())
 		if err != nil {
@@ -77,8 +85,9 @@ func (s *Server) handleCarry(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		target = fresh
+		target.Category = category
 	}
-	source, ok := s.store.Week(sourceID)
+	source, ok := s.store.WeekInCategory(category, sourceID)
 	if !ok {
 		writeJSON(w, http.StatusOK, map[string]any{
 			"week":    target,
@@ -91,7 +100,7 @@ func (s *Server) handleCarry(w http.ResponseWriter, r *http.Request) {
 	copied, created, skipped := todo.CarryTasks(source, target, time.Now())
 	if created > 0 {
 		target.Tasks = append(target.Tasks, copied...)
-		saved, err := s.store.SaveWeek(target)
+		saved, err := s.store.SaveWeekInCategory(category, target)
 		if err != nil {
 			writeError(w, http.StatusInternalServerError, "save_failed", err.Error())
 			return
@@ -118,11 +127,15 @@ func (s *Server) handleReport(w http.ResponseWriter, r *http.Request) {
 	if !validWeekID(w, id) {
 		return
 	}
+	category, ok := s.requestCategory(w, r)
+	if !ok {
+		return
+	}
 	mode := r.URL.Query().Get("mode")
 	if mode != "full" {
 		mode = "brief"
 	}
-	week, ok := s.store.Week(id)
+	week, ok := s.store.WeekInCategory(category, id)
 	if !ok {
 		writeError(w, http.StatusNotFound, "not_found", "这一周还没有记录")
 		return
@@ -141,6 +154,10 @@ func (s *Server) handlePolish(w http.ResponseWriter, r *http.Request) {
 	if !validWeekID(w, id) {
 		return
 	}
+	category, ok := s.requestCategory(w, r)
+	if !ok {
+		return
+	}
 	var body struct {
 		Mode string `json:"mode"`
 		Lang string `json:"lang"`
@@ -155,7 +172,7 @@ func (s *Server) handlePolish(w http.ResponseWriter, r *http.Request) {
 		fallbackLang = s.store.Settings().Language
 	}
 	lang := requestLanguage(r, fallbackLang)
-	week, ok := s.store.Week(id)
+	week, ok := s.store.WeekInCategory(category, id)
 	if !ok {
 		writeError(w, http.StatusNotFound, "not_found", "这一周还没有记录")
 		return

@@ -116,6 +116,7 @@ func (s *Server) handleSyncWebDAV(w http.ResponseWriter, r *http.Request) {
 	}
 	writeJSON(w, http.StatusOK, map[string]any{
 		"ok":         true,
+		"categories": stats.Categories,
 		"weeks":      stats.Weeks,
 		"tasks":      stats.Tasks,
 		"remotePath": strings.TrimPrefix(strings.TrimRight(cfg.RemoteDir, "/")+"/"+webdavFileName, "/"),

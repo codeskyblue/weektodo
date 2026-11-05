@@ -50,6 +50,9 @@ func New(st *store.Store, client *ai.Client, options Options) *Server {
 func (s *Server) routes() {
 	s.mux.HandleFunc("GET /api/health", s.handleHealth)
 	s.mux.HandleFunc("GET /api/meta", s.handleMeta)
+	s.mux.HandleFunc("GET /api/categories", s.handleListCategories)
+	s.mux.HandleFunc("POST /api/categories", s.handleCreateCategory)
+	s.mux.HandleFunc("PUT /api/categories/{id}", s.handleUpdateCategory)
 	s.mux.HandleFunc("GET /api/weeks", s.handleListWeeks)
 	s.mux.HandleFunc("GET /api/weeks/{id}", s.handleGetWeek)
 	s.mux.HandleFunc("POST /api/weeks/{id}", s.handleCreateWeek)
@@ -90,10 +93,15 @@ func (s *Server) handleMeta(w http.ResponseWriter, _ *http.Request) {
 	})
 }
 
-func (s *Server) handleListWeeks(w http.ResponseWriter, _ *http.Request) {
+func (s *Server) handleListWeeks(w http.ResponseWriter, r *http.Request) {
+	category, ok := s.requestCategory(w, r)
+	if !ok {
+		return
+	}
 	writeJSON(w, http.StatusOK, map[string]any{
 		"currentWeekId": currentWeekID(),
-		"weeks":         s.store.ListWeeks(),
+		"category":      category,
+		"weeks":         s.store.ListWeeksInCategory(category),
 	})
 }
 
@@ -102,7 +110,11 @@ func (s *Server) handleGetWeek(w http.ResponseWriter, r *http.Request) {
 	if !validWeekID(w, id) {
 		return
 	}
-	week, ok := s.store.Week(id)
+	category, ok := s.requestCategory(w, r)
+	if !ok {
+		return
+	}
+	week, ok := s.store.WeekInCategory(category, id)
 	if !ok {
 		// Multi-week views ask optimistically for neighbouring weeks and
 		// treat a missing week as an empty placeholder.
@@ -121,7 +133,11 @@ func (s *Server) handleCreateWeek(w http.ResponseWriter, r *http.Request) {
 	if !validWeekID(w, id) {
 		return
 	}
-	if week, ok := s.store.Week(id); ok {
+	category, ok := s.requestCategory(w, r)
+	if !ok {
+		return
+	}
+	if week, ok := s.store.WeekInCategory(category, id); ok {
 		writeJSON(w, http.StatusOK, map[string]any{"week": week})
 		return
 	}
@@ -130,7 +146,8 @@ func (s *Server) handleCreateWeek(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "invalid_week", err.Error())
 		return
 	}
-	week, err = s.store.SaveWeek(week)
+	week.Category = category
+	week, err = s.store.SaveWeekInCategory(category, week)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "save_failed", err.Error())
 		return
@@ -143,6 +160,10 @@ func (s *Server) handleSaveWeek(w http.ResponseWriter, r *http.Request) {
 	if !validWeekID(w, id) {
 		return
 	}
+	category, ok := s.requestCategory(w, r)
+	if !ok {
+		return
+	}
 	var body struct {
 		Tasks []*model.Task `json:"tasks"`
 	}
@@ -150,15 +171,16 @@ func (s *Server) handleSaveWeek(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "invalid_body", err.Error())
 		return
 	}
-	week, ok := s.store.Week(id)
+	week, ok := s.store.WeekInCategory(category, id)
 	if !ok {
 		week, err := todo.NewWeek(id, time.Now())
 		if err != nil {
 			writeError(w, http.StatusBadRequest, "invalid_week", err.Error())
 			return
 		}
+		week.Category = category
 		week.Tasks = body.Tasks
-		saved, err := s.store.SaveWeek(week)
+		saved, err := s.store.SaveWeekInCategory(category, week)
 		if err != nil {
 			writeError(w, http.StatusBadRequest, "invalid_tasks", err.Error())
 			return
@@ -167,7 +189,7 @@ func (s *Server) handleSaveWeek(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	week.Tasks = body.Tasks
-	saved, err := s.store.SaveWeek(week)
+	saved, err := s.store.SaveWeekInCategory(category, week)
 	if err != nil {
 		writeError(w, http.StatusBadRequest, "invalid_tasks", err.Error())
 		return
@@ -180,7 +202,11 @@ func (s *Server) handleDeleteWeek(w http.ResponseWriter, r *http.Request) {
 	if !validWeekID(w, id) {
 		return
 	}
-	if err := s.store.DeleteWeek(id); err != nil {
+	category, ok := s.requestCategory(w, r)
+	if !ok {
+		return
+	}
+	if err := s.store.DeleteWeekInCategory(category, id); err != nil {
 		writeError(w, http.StatusInternalServerError, "save_failed", err.Error())
 		return
 	}

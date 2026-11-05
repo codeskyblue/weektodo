@@ -14,6 +14,7 @@ import (
 
 	"github.com/uiautodev/weektodo/internal/ai"
 	"github.com/uiautodev/weektodo/internal/i18n"
+	"github.com/uiautodev/weektodo/internal/model"
 	"github.com/uiautodev/weektodo/internal/server"
 	"github.com/uiautodev/weektodo/internal/store"
 	"github.com/uiautodev/weektodo/internal/update"
@@ -168,6 +169,14 @@ func main() {
 		dialog.Show()
 	}
 
+	activeCategory := func() string {
+		id := st.Settings().ActiveCategory
+		if id == "" {
+			return model.DefaultCategoryID
+		}
+		return id
+	}
+
 	buildMenu := func() *application.Menu {
 		lang := currentLanguage()
 		text := trayText(lang)
@@ -182,7 +191,7 @@ func main() {
 		menu.Add(text.checkUpdates).OnClick(func(*application.Context) {
 			go checkUpdates(currentLanguage())
 		})
-		statusItem = menu.Add(fmt.Sprintf(text.today, st.TodayCount(time.Now())))
+		statusItem = menu.Add(fmt.Sprintf(text.today, st.TodayCountInCategory(activeCategory(), time.Now())))
 		statusItem.SetEnabled(false)
 		menu.AddSeparator()
 		menu.Add(text.hide).OnClick(func(*application.Context) { hideWindow() })
@@ -203,7 +212,7 @@ func main() {
 		syncLanguage()
 		lang := currentLanguage()
 		text := trayText(lang)
-		count := st.TodayCount(time.Now())
+		count := st.TodayCountInCategory(activeCategory(), time.Now())
 		application.InvokeSync(func() {
 			if count > 0 {
 				tray.SetLabel(strconv.Itoa(count))

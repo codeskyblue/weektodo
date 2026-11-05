@@ -11,6 +11,7 @@ import {
 } from './date';
 import type {
 	CarryPreview,
+	Category,
 	ConfirmOptions,
 	Filter,
 	Meta,
@@ -74,6 +75,9 @@ function taskLabel(task: Task): string {
 }
 
 class AppState {
+	categories = $state<Category[]>([]);
+	activeCategoryId = $state('');
+	categoryWeeks = $state<Record<string, string>>({});
 	weeks = $state<Week[]>([]);
 	anchorId = $state('');
 	weekSpan = $state<1 | 2 | 3>(1);
@@ -120,6 +124,15 @@ class AppState {
 	private autoSyncInFlight = false;
 	private autoSyncQueued = false;
 	private autoSyncErrorShown = false;
+	private categoryStateTimer: ReturnType<typeof setTimeout> | null = null;
+
+	get activeCategory(): Category | null {
+		return this.categories.find((category) => category.id === this.activeCategoryId) ?? null;
+	}
+
+	get activeCategories(): Category[] {
+		return this.categories.filter((category) => !category.archived);
+	}
 
 	get week(): Week | null {
 		return this.weeks.find((week) => week.id === this.anchorId) ?? null;
@@ -186,23 +199,30 @@ class AppState {
 			});
 		}
 		try {
-			const [meta, settings, weeks] = await Promise.all([
+			const [meta, settings, categoryResult] = await Promise.all([
 				api.getMeta(),
 				api.getSettings(),
-				api.listWeeks()
+				api.listCategories()
 			]);
 			this.meta = meta;
 			this.settings = settings;
+			this.categories = categoryResult.categories;
+			this.categoryWeeks = settings.categoryWeeks ?? {};
 			this.weekSpan = normalizeWeekSpan(settings.weekSpan);
 			const language: Language =
 				settings.language === 'zh' || settings.language === 'en' ? settings.language : i18n.language;
 			i18n.setLanguage(language);
 			if (!settings.language) void api.saveLanguage(language);
 			emitWails('weektodo:changed');
-			this.currentWeekId = weeks.currentWeekId;
-			const wanted = new URLSearchParams(window.location.search).get('week');
-			const initial = wanted && /^\d{4}-W\d{2}$/.test(wanted) ? wanted : meta.currentWeekId;
-			await this.loadWindow(initial);
+			this.currentWeekId = meta.currentWeekId;
+			const params = new URLSearchParams(window.location.search);
+			const category = this.resolveCategory(params.get('category') ?? settings.activeCategory ?? '');
+			const wanted = params.get('week');
+			const initial =
+				wanted && /^\d{4}-W\d{2}$/.test(wanted)
+					? wanted
+					: (this.categoryWeeks[category] ?? meta.currentWeekId);
+			await this.loadWindow(category, initial);
 			this.startClock();
 		} catch (error) {
 			this.error = messageOf(error);
@@ -223,14 +243,27 @@ class AppState {
 		}, 30_000);
 	}
 
+	private resolveCategory(preferred: string): string {
+		const available = this.categories.filter((category) => !category.archived);
+		if (preferred && available.some((category) => category.id === preferred)) {
+			return preferred;
+		}
+		const fallback = this.settings?.activeCategory ?? '';
+		if (fallback && available.some((category) => category.id === fallback)) {
+			return fallback;
+		}
+		return available[0]?.id ?? this.categories[0]?.id ?? 'default';
+	}
+
 	private async refreshWindow(): Promise<void> {
 		const anchorId = this.anchorId;
-		if (!anchorId) return;
+		const category = this.activeCategoryId;
+		if (!anchorId || !category) return;
 		const token = ++this.loadSeq;
 		try {
 			const weeks = await Promise.all(
 				this.windowIds(anchorId).map(async (id) => {
-					return (await api.getWeekOrNull(id)) ?? placeholderWeek(id);
+					return (await api.getWeekOrNull(category, id)) ?? placeholderWeek(id);
 				})
 			);
 			if (token !== this.loadSeq) return;
@@ -240,7 +273,7 @@ class AppState {
 		}
 	}
 
-	async loadWindow(anchorId: string): Promise<void> {
+	async loadWindow(categoryId: string, anchorId: string): Promise<void> {
 		const token = ++this.loadSeq;
 		this.navigating = true;
 		this.error = '';
@@ -251,13 +284,16 @@ class AppState {
 			// stay in memory until something is actually written to them.
 			const weeks = await Promise.all(
 				this.windowIds(anchorId).map(async (id) => {
-					if (id === anchorId) return (await api.createWeek(id)).week;
-					return (await api.getWeekOrNull(id)) ?? placeholderWeek(id);
+					if (id === anchorId) return (await api.createWeek(categoryId, id)).week;
+					return (await api.getWeekOrNull(categoryId, id)) ?? placeholderWeek(id);
 				})
 			);
 			if (token !== this.loadSeq) return;
+			this.activeCategoryId = categoryId;
 			this.weeks = weeks;
 			this.anchorId = anchorId;
+			this.categoryWeeks = { ...this.categoryWeeks, [categoryId]: anchorId };
+			this.persistCategoryState();
 			this.currentWeekId = this.currentWeekId || weekIdFor(todayISO());
 			this.filter = 'all';
 			this.reportMarkdown = '';
@@ -267,6 +303,7 @@ class AppState {
 			this.dirtyWeeks.clear();
 			this.revision++;
 			const url = new URL(window.location.href);
+			url.searchParams.set('category', categoryId);
 			url.searchParams.set('week', anchorId);
 			window.history.replaceState(null, '', url);
 		} catch (error) {
@@ -274,6 +311,22 @@ class AppState {
 		} finally {
 			if (token === this.loadSeq) this.navigating = false;
 		}
+	}
+
+	private persistCategoryState(): void {
+		if (!this.activeCategoryId) return;
+		if (this.categoryStateTimer) clearTimeout(this.categoryStateTimer);
+		this.categoryStateTimer = setTimeout(() => {
+			this.categoryStateTimer = null;
+			void api
+				.saveCategoryState(this.activeCategoryId, this.categoryWeeks)
+				.then((settings) => {
+					this.settings = settings;
+				})
+				.catch(() => {
+					// A failed preference save must not disturb editing.
+				});
+		}, 500);
 	}
 
 	private windowIds(anchorId: string): string[] {
@@ -289,7 +342,17 @@ class AppState {
 
 	async goToWeek(id: string): Promise<void> {
 		if (id === this.anchorId) return;
-		await this.loadWindow(id);
+		await this.loadWindow(this.activeCategoryId, id);
+	}
+
+	async switchCategory(id: string): Promise<void> {
+		if (!id || id === this.activeCategoryId) return;
+		const category = this.categories.find((item) => item.id === id);
+		if (!category || category.archived) return;
+		await this.flushSave();
+		await this.waitForSave();
+		const week = this.categoryWeeks[id] ?? this.currentWeekId;
+		await this.loadWindow(id, week);
 	}
 
 	async goToday(): Promise<void> {
@@ -334,7 +397,7 @@ class AppState {
 			if (!week) continue;
 			const tasks = JSON.parse(JSON.stringify(week.tasks)) as Task[];
 			try {
-				await api.saveWeek(id, tasks);
+				await api.saveWeek(this.activeCategoryId, id, tasks);
 			} catch (error) {
 				failure ??= error;
 				this.dirtyWeeks.add(id);
@@ -620,7 +683,7 @@ class AppState {
 		if (!this.week || this.carryBusy) return;
 		this.carryBusy = true;
 		try {
-			const preview: CarryPreview = await api.carryPreview(this.week.id);
+			const preview: CarryPreview = await api.carryPreview(this.activeCategoryId, this.week.id);
 			if (preview.reason === 'no_previous_week') {
 				toast.info(t('上周还没有记录'), { description: t('没有可以带入的任务。') });
 				return;
@@ -645,7 +708,7 @@ class AppState {
 					if (!weekId) return;
 					this.carryBusy = true;
 					try {
-						const result = await api.carryOver(weekId);
+						const result = await api.carryOver(this.activeCategoryId, weekId);
 						this.replaceWeek(result.week);
 						this.dirtyWeeks.delete(result.week.id);
 						this.reportMarkdown = '';
@@ -691,7 +754,7 @@ class AppState {
 		this.reportLoading = true;
 		this.reportError = '';
 		try {
-			const response = await api.getReport(this.week.id, this.reportMode);
+			const response = await api.getReport(this.activeCategoryId, this.week.id, this.reportMode);
 			this.reportMarkdown = response.markdown;
 			this.reportStats = response.stats;
 		} catch (error) {
@@ -710,7 +773,7 @@ class AppState {
 		}
 		this.aiLoading = true;
 		try {
-			const response = await api.polishReport(this.week.id, this.reportMode);
+			const response = await api.polishReport(this.activeCategoryId, this.week.id, this.reportMode);
 			this.aiMarkdown = response.markdown;
 			toast.success(t('AI 周报已生成'));
 		} catch (error) {
@@ -786,6 +849,7 @@ class AppState {
 					tasks: result.tasks
 				})
 			);
+			await this.refreshCategories();
 			if (weekID) {
 				await this.refreshWindow();
 			}
@@ -793,6 +857,34 @@ class AppState {
 		} catch (error) {
 			toast.error(t('同步失败'), { description: messageOf(error) });
 			return null;
+		}
+	}
+
+	async refreshCategories(): Promise<void> {
+		const result = await api.listCategories();
+		this.categories = result.categories;
+		const current = this.categories.find(
+			(category) => category.id === this.activeCategoryId && !category.archived
+		);
+		if (current) return;
+		const next = this.resolveCategory(this.settings?.activeCategory ?? '');
+		if (next) {
+			await this.loadWindow(next, this.categoryWeeks[next] ?? this.currentWeekId);
+		}
+	}
+
+	async saveCategory(
+		id: string | null,
+		draft: { name: string; color: string; archived?: boolean; order?: number }
+	): Promise<boolean> {
+		try {
+			if (id) await api.updateCategory(id, draft);
+			else await api.createCategory(draft.name, draft.color);
+			await this.refreshCategories();
+			return true;
+		} catch (error) {
+			toast.error(t('保存分类失败'), { description: messageOf(error) });
+			return false;
 		}
 	}
 
@@ -850,6 +942,7 @@ class AppState {
 			});
 			this.autoSyncErrorShown = false;
 			if (revision === this.revision) {
+				await this.refreshCategories();
 				await this.refreshWindow();
 			} else {
 				this.autoSyncQueued = true;
@@ -878,7 +971,9 @@ class AppState {
 		} catch (error) {
 			toast.error(t('保存设置失败'), { description: messageOf(error) });
 		}
-		if (this.anchorId) await this.loadWindow(this.anchorId);
+		if (this.activeCategoryId && this.anchorId) {
+			await this.loadWindow(this.activeCategoryId, this.anchorId);
+		}
 	}
 
 	moveOptions(taskId: string): { week: Week; direction: 'previous' | 'next' }[] {
@@ -903,7 +998,7 @@ class AppState {
 		await this.waitForSave();
 		await this.flushSave();
 		try {
-			const result = await api.moveTask(from.id, taskId, toWeekId);
+			const result = await api.moveTask(this.activeCategoryId, from.id, taskId, toWeekId);
 			this.replaceWeek(result.from);
 			this.replaceWeek(result.to);
 			this.dirtyWeeks.delete(result.from.id);

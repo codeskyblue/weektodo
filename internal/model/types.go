@@ -29,9 +29,24 @@ type Task struct {
 	Children    []*Task      `json:"children"`
 }
 
-// Week is one ISO week of tasks.
+// DefaultCategoryID is the category used by data created before categories.
+const DefaultCategoryID = "default"
+
+// Category is one independent weekly workspace.
+type Category struct {
+	ID        string `json:"id"`
+	Name      string `json:"name"`
+	Color     string `json:"color,omitempty"`
+	Order     int    `json:"order,omitempty"`
+	Archived  bool   `json:"archived"`
+	CreatedAt string `json:"createdAt,omitempty"`
+	UpdatedAt string `json:"updatedAt,omitempty"`
+}
+
+// Week is one ISO week of tasks inside a category.
 type Week struct {
 	ID        string  `json:"id"`
+	Category  string  `json:"category,omitempty"`
 	Start     string  `json:"start"` // YYYY-MM-DD, Monday
 	End       string  `json:"end"`   // YYYY-MM-DD, Sunday
 	CreatedAt string  `json:"createdAt,omitempty"`
@@ -40,8 +55,9 @@ type Week struct {
 
 // Data is the complete persisted document.
 type Data struct {
-	Version int     `json:"version"`
-	Weeks   []*Week `json:"weeks"`
+	Version    int         `json:"version"`
+	Categories []*Category `json:"categories,omitempty"`
+	Weeks      []*Week     `json:"weeks"`
 }
 
 // AIConfig is the persisted OpenAI-compatible endpoint configuration.
@@ -62,10 +78,12 @@ type WebDAVConfig struct {
 
 // Settings is stored separately from task data.
 type Settings struct {
-	AI       AIConfig     `json:"ai"`
-	WebDAV   WebDAVConfig `json:"webdav"`
-	WeekSpan int          `json:"weekSpan,omitempty"`
-	Language string       `json:"language,omitempty"`
+	AI             AIConfig          `json:"ai"`
+	WebDAV         WebDAVConfig      `json:"webdav"`
+	WeekSpan       int               `json:"weekSpan,omitempty"`
+	Language       string            `json:"language,omitempty"`
+	ActiveCategory string            `json:"activeCategory,omitempty"`
+	CategoryWeeks  map[string]string `json:"categoryWeeks,omitempty"`
 }
 
 // WeekSummary is a lightweight week list entry.

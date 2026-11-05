@@ -9,16 +9,19 @@ import (
 	"github.com/uiautodev/weektodo/internal/ai"
 	"github.com/uiautodev/weektodo/internal/i18n"
 	"github.com/uiautodev/weektodo/internal/model"
+	"github.com/uiautodev/weektodo/internal/todo"
 	"github.com/uiautodev/weektodo/internal/webdav"
 )
 
 func (s *Server) handleGetSettings(w http.ResponseWriter, _ *http.Request) {
 	settings := s.store.Settings()
 	writeJSON(w, http.StatusOK, map[string]any{
-		"ai":       publicAI(settings.AI),
-		"webdav":   publicWebDAV(settings.WebDAV),
-		"weekSpan": settings.WeekSpan,
-		"language": settings.Language,
+		"ai":             publicAI(settings.AI),
+		"webdav":         publicWebDAV(settings.WebDAV),
+		"weekSpan":       settings.WeekSpan,
+		"language":       settings.Language,
+		"activeCategory": settings.ActiveCategory,
+		"categoryWeeks":  settings.CategoryWeeks,
 	})
 }
 
@@ -38,8 +41,10 @@ func (s *Server) handleSaveSettings(w http.ResponseWriter, r *http.Request) {
 			AutoSync      *bool   `json:"autoSync"`
 			ClearPassword bool    `json:"clearPassword"`
 		} `json:"webdav"`
-		WeekSpan *int    `json:"weekSpan"`
-		Language *string `json:"language"`
+		WeekSpan       *int              `json:"weekSpan"`
+		Language       *string           `json:"language"`
+		ActiveCategory *string           `json:"activeCategory"`
+		CategoryWeeks  map[string]string `json:"categoryWeeks"`
 	}
 	if err := decodeJSON(w, r, &body); err != nil {
 		writeError(w, http.StatusBadRequest, "invalid_body", err.Error())
@@ -96,16 +101,44 @@ func (s *Server) handleSaveSettings(w http.ResponseWriter, r *http.Request) {
 			current.Language = string(lang)
 		}
 	}
+	if body.ActiveCategory != nil {
+		id := strings.TrimSpace(*body.ActiveCategory)
+		if id == "" {
+			current.ActiveCategory = ""
+		} else if category, ok := s.store.Category(id); !ok || category.Archived {
+			writeError(w, http.StatusBadRequest, "invalid_category", i18n.T(responseLanguage(w),
+				"分类不存在或已归档",
+				"Category does not exist or is archived"))
+			return
+		} else {
+			current.ActiveCategory = id
+		}
+	}
+	if body.CategoryWeeks != nil {
+		next := map[string]string{}
+		for id, weekID := range body.CategoryWeeks {
+			if category, ok := s.store.Category(id); !ok || category.Archived {
+				continue
+			}
+			if _, _, err := todo.ParseWeekID(weekID); err != nil {
+				continue
+			}
+			next[id] = weekID
+		}
+		current.CategoryWeeks = next
+	}
 	if err := s.store.UpdateSettings(current); err != nil {
 		writeError(w, http.StatusInternalServerError, "save_failed", err.Error())
 		return
 	}
 	settings := s.store.Settings()
 	writeJSON(w, http.StatusOK, map[string]any{
-		"ai":       publicAI(settings.AI),
-		"webdav":   publicWebDAV(settings.WebDAV),
-		"weekSpan": settings.WeekSpan,
-		"language": settings.Language,
+		"ai":             publicAI(settings.AI),
+		"webdav":         publicWebDAV(settings.WebDAV),
+		"weekSpan":       settings.WeekSpan,
+		"language":       settings.Language,
+		"activeCategory": settings.ActiveCategory,
+		"categoryWeeks":  settings.CategoryWeeks,
 	})
 }
 

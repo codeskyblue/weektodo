@@ -18,8 +18,19 @@ export interface Task {
 	children: Task[];
 }
 
+export interface Category {
+	id: string;
+	name: string;
+	color: string;
+	order: number;
+	archived: boolean;
+	createdAt?: string;
+	updatedAt?: string;
+}
+
 export interface Week {
 	id: string;
+	category?: string;
 	start: string;
 	end: string;
 	createdAt?: string;
@@ -64,6 +75,8 @@ export interface SettingsPublic {
 	webdav: WebDAVPublic;
 	weekSpan?: number;
 	language?: 'zh' | 'en';
+	activeCategory?: string;
+	categoryWeeks?: Record<string, string>;
 }
 
 export interface Meta {

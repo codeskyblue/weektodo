@@ -1,4 +1,5 @@
 <script lang="ts">
+	import Check from '@lucide/svelte/icons/check';
 	import ChevronLeft from '@lucide/svelte/icons/chevron-left';
 	import ChevronRight from '@lucide/svelte/icons/chevron-right';
 	import FileText from '@lucide/svelte/icons/file-text';
@@ -36,8 +37,40 @@
 				title={t('回到本周')}
 			>
 				<Logo size={30} />
-				<span class="hidden text-[15px] font-semibold tracking-tight sm:block">WeekTodo</span>
+				<span class="hidden text-[15px] font-semibold tracking-tight lg:block">WeekTodo</span>
 			</button>
+
+			<div class="flex min-w-0 items-center">
+				<DropdownMenu.Root>
+					<DropdownMenu.Trigger>
+						{#snippet child({ props })}
+							<Button {...props} variant="ghost" size="sm" class="max-w-24 gap-1.5 px-2 sm:max-w-36">
+								<span
+									class="size-2.5 shrink-0 rounded-full"
+									style={`background-color: ${app.activeCategory?.color || '#3b82f6'}`}
+								></span>
+								<span class="hidden truncate text-xs font-medium sm:inline">
+									{app.activeCategory?.name ?? t('分类')}
+								</span>
+							</Button>
+						{/snippet}
+					</DropdownMenu.Trigger>
+					<DropdownMenu.Content align="start" class="w-52">
+						{#each app.activeCategories as category (category.id)}
+							<DropdownMenu.Item onSelect={() => app.switchCategory(category.id)}>
+								<span
+									class="size-2.5 rounded-full"
+									style={`background-color: ${category.color || '#3b82f6'}`}
+								></span>
+								<span class="truncate">{category.name}</span>
+								{#if category.id === app.activeCategoryId}
+									<Check class="ml-auto size-3.5" />
+								{/if}
+							</DropdownMenu.Item>
+						{/each}
+					</DropdownMenu.Content>
+				</DropdownMenu.Root>
+			</div>
 
 			<div class="ml-1 flex min-w-0 items-center gap-1">
 				<Button
@@ -76,7 +109,7 @@
 			</div>
 
 			<div class="ml-auto flex items-center gap-1.5">
-				<div class="mr-1 hidden items-center gap-2 sm:flex">
+				<div class="mr-1 hidden items-center gap-2 md:flex">
 					{#if app.saveStatus === 'saving'}
 						<span class="text-xs text-muted-foreground">{t('保存中…')}</span>
 					{:else if app.saveStatus === 'error'}
@@ -108,10 +141,11 @@
 							class:text-foreground={app.weekSpan === count}
 							onclick={() => app.setWeekSpan(count as 1 | 2 | 3)}
 							title={t('显示 {count} 周', { count })}
+							aria-label={t('{count}周', { count })}
 							aria-pressed={app.weekSpan === count}
 						>
-							<span class="hidden sm:inline">{t('{count}周', { count })}</span>
-							<span class="sm:hidden">{count}</span>
+							<span class="hidden lg:inline">{t('{count}周', { count })}</span>
+							<span class="lg:hidden">{count}</span>
 						</button>
 					{/each}
 				</div>
