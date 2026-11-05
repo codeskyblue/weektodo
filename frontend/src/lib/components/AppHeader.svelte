@@ -2,6 +2,7 @@
 	import ChevronLeft from '@lucide/svelte/icons/chevron-left';
 	import ChevronRight from '@lucide/svelte/icons/chevron-right';
 	import FileText from '@lucide/svelte/icons/file-text';
+	import Languages from '@lucide/svelte/icons/languages';
 	import Monitor from '@lucide/svelte/icons/monitor';
 	import Moon from '@lucide/svelte/icons/moon';
 	import Settings from '@lucide/svelte/icons/settings';
@@ -112,7 +113,7 @@
 					title={t('切换语言')}
 					aria-label={t('切换语言')}
 				>
-					<span class="text-[15px] font-semibold leading-none">文</span>
+					<Languages />
 				</Button>
 				<DropdownMenu.Root>
 					<DropdownMenu.Trigger>
