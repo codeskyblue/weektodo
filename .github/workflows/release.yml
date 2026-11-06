@@ -81,7 +81,7 @@ jobs:
       - name: Generate checksums
         run: |
           set -euo pipefail
-          (cd dist && shasum -a 256 weektodo-server-* WeekTodo-desktop-* WeekTodo-windows-* > SHA256SUMS)
+          (cd dist && shasum -a 256 weektodo-server-* WeekTodo-desktop-* > SHA256SUMS)
       - name: Generate release notes
         run: ./scripts/release-notes.sh "${GITHUB_REF_NAME}" > "${RUNNER_TEMP}/release-notes.md"
       - uses: softprops/action-gh-release@v3

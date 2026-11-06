@@ -81,6 +81,6 @@ WeekTodo for Windows
 No installer is required; keep the executable in any writable folder.
 EOF
 	rm -f "${DESKTOP}/rsrc_windows_${arch}.syso"
-	(cd "${stage}" && zip -q -r "${OUT}/WeekTodo-windows-${arch}-${VERSION}.zip" .)
-	echo "Built ${OUT}/WeekTodo-windows-${arch}-${VERSION}.zip"
+	(cd "${stage}" && zip -q -r "${OUT}/WeekTodo-desktop-windows-${arch}-${VERSION}.zip" .)
+	echo "Built ${OUT}/WeekTodo-desktop-windows-${arch}-${VERSION}.zip"
 done

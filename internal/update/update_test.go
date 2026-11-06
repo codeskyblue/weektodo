@@ -53,6 +53,8 @@ func TestAssetName(t *testing.T) {
 		{"linux", "amd64", "0.2.0", false, "weektodo-server-linux-x86_64-0.2.0"},
 		{"windows", "amd64", "0.2.0", false, "weektodo-server-windows-amd64-0.2.0.exe"},
 		{"darwin", "arm64", "0.2.0", true, "WeekTodo-desktop-mac-0.2.0.dmg"},
+		{"windows", "amd64", "0.2.0", true, "WeekTodo-desktop-windows-amd64-0.2.0.zip"},
+		{"windows", "arm64", "v0.2.0", true, "WeekTodo-desktop-windows-arm64-0.2.0.zip"},
 	}
 	for _, tc := range cases {
 		got, err := AssetName(tc.goos, tc.goarch, tc.version, tc.desktop)

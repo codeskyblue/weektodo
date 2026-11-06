@@ -21,7 +21,7 @@
 - **中英文界面**：首次启动跟随系统语言，设置里可切换简体中文 / English；主界面、周报、托盘菜单、更新对话框和 AI 提示词同步切换。
 - **WebDAV 同步**：在设置里填写 WebDAV 地址、用户名、密码和远端目录，可以测试连接并同步 `weektodo.json`；本地和远端按任务更新时间双向合并，较新的修改优先。支持手动同步，也可以开启自动同步。
 - **版本可见**：主界面顶部显示当前版本号，点击直接打开「应用更新」。
-- **应用内更新**：检查新版本时优先直连 GitHub，失败后自动切换 gh-proxy；下载校验 SHA256，安装 macOS DMG 后自动重启。菜单栏和设置页都可以检查更新。
+- **应用内更新**：检查新版本时优先直连 GitHub，失败后自动切换 gh-proxy；下载校验 SHA256。macOS 安装 DMG，Windows 解压 zip 替换 exe，然后自动重启。菜单栏和设置页都可以检查更新。
 - **本地优先**：所有数据保存在 `data.json`，每天首次保存自动备份，保留 14 天。
 
 ## WebDAV 同步
@@ -65,7 +65,7 @@ make desktop
 
 # 构建 Windows 桌面版（交叉编译）
 make windows
-# 输出 desktop/build/bin/windows/WeekTodo-windows-<arch>-<version>.zip
+# 输出 desktop/build/bin/windows/WeekTodo-desktop-windows-<arch>-<version>.zip
 ```
 
 Windows 版是免安装的便携包，解压后运行 `WeekTodo.exe`。需要 Microsoft Edge WebView2 Runtime（Windows 10/11 通常已安装），数据保存在 `%AppData%\weektodo`。
@@ -103,7 +103,8 @@ make dev
 - 菜单栏右键「检查更新…」，或打开「设置 → 应用更新」。
 - 检查版本时**优先直接访问 GitHub**；如果 GitHub 请求失败（超时、403、网络不可达等），自动改用 `https://gh-proxy.org/` 代理重试。
 - 更新包下载同样优先 GitHub，失败后回退到 gh-proxy。
-- 下载完成后用 `SHA256SUMS` / `update.json` 里的 SHA256 校验，再挂载 DMG 替换应用并重启。
+- 下载完成后用 `SHA256SUMS` / `update.json` 里的 SHA256 校验。
+- macOS 挂载 DMG 替换应用并重启；Windows 解压 zip，把正在运行的 exe 改名为 `.old`，写入新版本并重启。自更新要求安装目录可写，因此建议使用免安装 zip。
 - 当前为开发版本（`version=dev`）时不执行更新。
 
 可以通过环境变量覆盖更新源，便于调试：

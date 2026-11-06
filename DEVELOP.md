@@ -230,7 +230,7 @@ make desktop
 
 ```bash
 make windows
-# desktop/build/bin/windows/WeekTodo-windows-<arch>-<version>.zip
+# desktop/build/bin/windows/WeekTodo-desktop-windows-<arch>-<version>.zip
 ```
 
 - `scripts/build-windows-app.sh` 交叉编译 `amd64` 和 `arm64`。
@@ -239,7 +239,10 @@ make windows
 - zip 内包含 `WeekTodo.exe` 和说明文件，免安装。
 - Windows 需要 WebView2 Evergreen 运行时，数据目录为 `%AppData%\weektodo`。
 - `desktop/build/windows/icon.ico` 和 `wails.exe.manifest` 纳入版本控制；`make icons` 可重新生成图标。
-- 目前桌面版自动更新只支持 macOS；Windows 桌面更新会返回“不支持”，需要后续单独实现。
+- Windows 桌面版支持应用内自动更新：Release 提供 `WeekTodo-desktop-windows-<arch>-<version>.zip`，下载后解压 `WeekTodo.exe`，把正在运行的 exe 重命名为 `.old`，写入新文件并重启进程。
+- 自更新要求安装目录可写，因此使用免安装 zip；放在 Program Files 等只读目录会失败。
+- 当前 Windows exe 未签名，首次下载运行可能触发 SmartScreen；代码签名留待后续。
+- 更新后旧文件保留为 `WeekTodo.exe.old`，下次更新会自动覆盖清理。
 - Release workflow 会构建两种架构的 zip，并加入 `SHA256SUMS` 和 GitHub Release。
 
 构建脚本分别编译 `amd64` 和 `arm64`，用 `lipo` 合并，复制 `Info.plist` 和

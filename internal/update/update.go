@@ -858,8 +858,14 @@ func replaceExecutable(source, target string) error {
 func AssetName(goos, goarch, version string, desktop bool) (string, error) {
 	version = strings.TrimPrefix(strings.TrimSpace(version), "v")
 	if desktop {
-		if goos == "darwin" {
+		switch goos {
+		case "darwin":
 			return "WeekTodo-desktop-mac-" + version + ".dmg", nil
+		case "windows":
+			switch goarch {
+			case "amd64", "arm64":
+				return "WeekTodo-desktop-windows-" + goarch + "-" + version + ".zip", nil
+			}
 		}
 		return "", fmt.Errorf("desktop updates are not available for %s/%s", goos, goarch)
 	}
