@@ -159,6 +159,7 @@ Release Notes 由 `scripts/release-notes.sh` 从上一个 tag 到当前 tag 的�
 ## 拖拽整理
 
 - `TaskRow` 只在拖拽手柄上启用 HTML5 `draggable`，避免干扰文本输入和选中。
+- 拖动开始时克隆整行作为 `setDragImage` 拖拽图像，透明度 0.7、宽度上限 480px、带阴影，并同步输入框当前文本。
 - 拖到任务行上调用 `app.dropOnTask`：同周直接摘下子树并挂到目标 `children`，保留日期；跨周调用移动接口，服务端清空日期和 `carriedFrom` 并单次保存。
 - 拖到周列空白区域调用 `app.dropOnWeek`：同周移动到根节点末尾，跨周走移动接口的根级模式。
 - `canDropOnTask` 禁止拖到自己、自己的子孙和已废弃任务下面。

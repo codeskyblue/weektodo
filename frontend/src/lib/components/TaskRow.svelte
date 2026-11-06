@@ -28,6 +28,7 @@
 	} = $props();
 
 	let inputEl = $state<HTMLInputElement | null>(null);
+	let rowEl = $state<HTMLElement | null>(null);
 
 	const task = $derived(row.task);
 	const done = $derived(task.status === 'done');
@@ -90,6 +91,44 @@
 		}
 	}
 
+	function handleDragStart(event: DragEvent): void {
+		if (event.dataTransfer) {
+			event.dataTransfer.effectAllowed = 'move';
+			event.dataTransfer.setData('text/plain', task.id);
+		}
+		if (event.dataTransfer && rowEl) {
+			const rect = rowEl.getBoundingClientRect();
+			const ghost = rowEl.cloneNode(true) as HTMLElement;
+			ghost.style.position = 'fixed';
+			ghost.style.top = '-1000px';
+			ghost.style.left = '-1000px';
+			ghost.style.width = `${Math.min(rect.width, 480)}px`;
+			ghost.style.opacity = '0.7';
+			ghost.style.pointerEvents = 'none';
+			ghost.style.overflow = 'hidden';
+			ghost.style.zIndex = '9999';
+			ghost.style.background = 'var(--background, #fff)';
+			ghost.style.borderRadius = '0.5rem';
+			ghost.style.boxShadow = '0 10px 30px rgb(0 0 0 / 0.18)';
+			const sourceInputs = rowEl.querySelectorAll('input');
+			const ghostInputs = ghost.querySelectorAll('input');
+			sourceInputs.forEach((source, index) => {
+				const target = ghostInputs[index] as HTMLInputElement | undefined;
+				if (!target) return;
+				if (source instanceof HTMLInputElement) {
+					target.value = source.value;
+					if (source.type === 'checkbox') target.checked = source.checked;
+				}
+			});
+			document.body.appendChild(ghost);
+			const offsetX = Math.max(0, Math.min(event.clientX - rect.left, ghost.offsetWidth - 1));
+			const offsetY = Math.max(0, Math.min(event.clientY - rect.top, ghost.offsetHeight - 1));
+			event.dataTransfer.setDragImage(ghost, offsetX, offsetY);
+			requestAnimationFrame(() => ghost.remove());
+		}
+		app.startTaskDrag(task.id);
+	}
+
 	function handleBlur(event: FocusEvent): void {
 		const input = event.currentTarget as HTMLInputElement;
 		const value = input.value;
@@ -105,6 +144,7 @@
 </script>
 
 <div
+	bind:this={rowEl}
 	class="group/row relative flex items-start gap-1 rounded-lg py-1 pr-2 transition-colors hover:bg-muted/55 focus-within:bg-muted/40 {app.dropTaskId ===
 	task.id
 		? 'bg-primary/5 ring-2 ring-primary/50 ring-inset'
@@ -138,13 +178,7 @@
 			class="cursor-grab rounded p-0.5 text-muted-foreground/40 opacity-0 transition-opacity hover:text-muted-foreground group-hover/row:opacity-100 group-focus-within/row:opacity-100 active:cursor-grabbing"
 			title={t('拖动任务')}
 			aria-label={t('拖动任务')}
-			ondragstart={(event) => {
-				if (event.dataTransfer) {
-					event.dataTransfer.effectAllowed = 'move';
-					event.dataTransfer.setData('text/plain', task.id);
-				}
-				app.startTaskDrag(task.id);
-			}}
+			ondragstart={handleDragStart}
 			ondragend={() => app.endTaskDrag()}
 			onclick={(event) => event.preventDefault()}
 		>
