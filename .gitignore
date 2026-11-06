@@ -11,3 +11,4 @@ desktop/build/windows/*
 *.log
 desktop/desktop
 dist/
+/windows-syso
