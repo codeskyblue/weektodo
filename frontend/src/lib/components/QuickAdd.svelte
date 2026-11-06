@@ -55,7 +55,7 @@
 		: 'sticky bottom-0 z-20 -mx-4 mt-6 border-t bg-background/90 px-4 py-3 backdrop-blur sm:-mx-6 sm:px-6'}
 >
 	<form
-		class={compact ? 'flex items-center gap-1.5' : 'mx-auto flex w-full max-w-4xl items-center gap-2'}
+		class={compact ? 'flex items-center gap-1.5' : 'mx-auto flex w-full max-w-6xl items-center gap-2'}
 		onsubmit={(event) => {
 			event.preventDefault();
 			submit();
@@ -125,7 +125,7 @@
 	</form>
 	{#if !compact}
 		<div
-			class="mx-auto mt-1.5 hidden w-full max-w-4xl items-center gap-3 text-[11px] text-muted-foreground sm:flex"
+			class="mx-auto mt-1.5 hidden w-full max-w-6xl items-center gap-3 text-[11px] text-muted-foreground sm:flex"
 		>
 			<span class="flex items-center gap-1"><CornerDownLeft class="size-3" /> {t('Enter 新建同级')}</span>
 			<span>{t('行首 Tab 缩进')}</span>

@@ -39,7 +39,11 @@
 </script>
 
 <header class="sticky top-0 z-30 border-b bg-background/85 backdrop-blur">
-	<div class="mx-auto w-full max-w-4xl px-4 py-3 sm:px-6">
+	<div
+		class="mx-auto w-full px-4 py-3 sm:px-6"
+		class:max-w-6xl={app.weekSpan === 1}
+		class:max-w-7xl={app.weekSpan > 1}
+	>
 		<div class="flex items-center gap-3">
 			<button
 				type="button"
