@@ -63,7 +63,7 @@
 		{ id: 'data', label: '数据' }
 	] as const;
 	type Section = (typeof sections)[number]['id'];
-	let section = $state<Section>('ai');
+	let section = $state<Section>((app.settingsSection as Section) ?? 'ai');
 
 	const categoryColors = ['#3b82f6', '#8b5cf6', '#22c55e', '#f59e0b', '#f43f5e', '#64748b'];
 	type CategoryDraft = {
@@ -394,7 +394,10 @@
 						class:bg-muted={section === item.id}
 						class:font-medium={section === item.id}
 						class:text-foreground={section === item.id}
-						onclick={() => (section = item.id)}
+						onclick={() => {
+							section = item.id;
+							app.settingsSection = item.id;
+						}}
 					>
 						{t(item.label)}
 					</button>

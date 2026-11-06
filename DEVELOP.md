@@ -64,7 +64,7 @@ WEEKTODO_DATA_DIR=/tmp/weektodo-dev make dev
 | GET | `/api/weeks/{id}` | 读取一周，`?optional=1` 时不存在返回 `week: null` |
 | POST | `/api/weeks/{id}` | 创建空周 |
 | PUT | `/api/weeks/{id}` | 保存整周任务树 |
-| POST | `/api/weeks/{id}/move` | 把任务子树移到另一周 |
+| POST | `/api/weeks/{id}/move` | 移动任务子树，可用 `parentTaskId` 挂到目标任务下 |
 | DELETE | `/api/weeks/{id}` | 删除一周 |
 | GET | `/api/weeks/{id}/carry-over` | 预览上周可带入任务 |
 | POST | `/api/weeks/{id}/carry-over` | 执行带入 |
@@ -155,6 +155,19 @@ Release Notes 由 `scripts/release-notes.sh` 从上一个 tag 到当前 tag 的�
 - 分类合并按 ID 和 `updatedAt` 进行；归档状态、名称、颜色取较新的一侧。
 - `/api/settings` 保存 `activeCategory` 和 `categoryWeeks`，前者记住当前空间，后者记住每个分类最后浏览的周。
 - 托盘计数使用当前分类。
+
+## 拖拽整理
+
+- `TaskRow` 只在拖拽手柄上启用 HTML5 `draggable`，避免干扰文本输入和选中。
+- 拖到任务行上调用 `app.dropOnTask`：同周直接摘下子树并挂到目标 `children`，保留日期；跨周调用移动接口，服务端清空日期和 `carriedFrom` 并单次保存。
+- 拖到周列空白区域调用 `app.dropOnWeek`：同周移动到根节点末尾，跨周走移动接口的根级模式。
+- `canDropOnTask` 禁止拖到自己、自己的子孙和已废弃任务下面。
+- `POST /api/weeks/{id}/move` 的 `parentTaskId` 可选；同周传入父任务时允许重新挂载，并校验目标父任务存在且不在被移动子树内。
+- 触屏设备暂不支持原生 HTML5 拖拽，继续使用 Tab / Shift+Tab / 任务菜单。
+
+## 版本号
+
+顶部 `WeekTodo` 名称旁显示 `vX.Y.Z` 或 `dev`，点击打开设置 →「应用更新」。设置弹窗当前分区由 `AppState.settingsSection` 控制，便于从外部直接定位。
 
 ## 多周视图
 

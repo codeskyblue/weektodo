@@ -82,6 +82,9 @@ class AppState {
 	anchorId = $state('');
 	weekSpan = $state<1 | 2 | 3>(1);
 	moveBusy = $state(false);
+	draggingTaskId = $state('');
+	dropTaskId = $state('');
+	dropWeekId = $state('');
 	meta = $state<Meta | null>(null);
 	settings = $state<SettingsPublic | null>(null);
 	currentWeekId = $state(weekIdFor(todayISO()));
@@ -94,6 +97,7 @@ class AppState {
 	saveError = $state('');
 	carryBusy = $state(false);
 	settingsOpen = $state(false);
+	settingsSection = $state('ai');
 	reportOpen = $state(false);
 	reportMode = $state<ReportMode>('brief');
 	reportMarkdown = $state('');
@@ -274,6 +278,7 @@ class AppState {
 	}
 
 	async loadWindow(categoryId: string, anchorId: string): Promise<void> {
+		this.endTaskDrag();
 		const token = ++this.loadSeq;
 		this.navigating = true;
 		this.error = '';
@@ -767,7 +772,7 @@ class AppState {
 	async polishReport(): Promise<void> {
 		if (!this.week) return;
 		if (!this.settings?.ai.configured) {
-			this.settingsOpen = true;
+			this.openSettings('ai');
 			toast.info(t('请先配置 AI 接口'));
 			return;
 		}
@@ -989,16 +994,23 @@ class AppState {
 		return options;
 	}
 
-	async moveTaskToWeek(taskId: string, toWeekId: string): Promise<void> {
+	async moveTaskToWeek(taskId: string, toWeekId: string, parentTaskId = ''): Promise<void> {
 		if (this.moveBusy) return;
 		const from = this.weekOfTask(taskId);
-		if (!from || from.id === toWeekId) return;
+		if (!from) return;
+		if (from.id === toWeekId && !parentTaskId) return;
 		this.moveBusy = true;
 		await this.flushSave();
 		await this.waitForSave();
 		await this.flushSave();
 		try {
-			const result = await api.moveTask(this.activeCategoryId, from.id, taskId, toWeekId);
+			const result = await api.moveTask(
+				this.activeCategoryId,
+				from.id,
+				taskId,
+				toWeekId,
+				parentTaskId
+			);
 			this.replaceWeek(result.from);
 			this.replaceWeek(result.to);
 			this.dirtyWeeks.delete(result.from.id);
@@ -1010,6 +1022,98 @@ class AppState {
 		} finally {
 			this.moveBusy = false;
 		}
+	}
+
+	startTaskDrag(taskId: string): void {
+		this.draggingTaskId = taskId;
+		this.dropTaskId = '';
+		this.dropWeekId = '';
+	}
+
+	endTaskDrag(): void {
+		this.draggingTaskId = '';
+		this.dropTaskId = '';
+		this.dropWeekId = '';
+	}
+
+	canDropOnTask(targetTaskId: string): boolean {
+		const dragId = this.draggingTaskId;
+		if (!dragId || dragId === targetTaskId) return false;
+		const sourceWeek = this.weekOfTask(dragId);
+		const targetWeek = this.weekOfTask(targetTaskId);
+		if (!sourceWeek || !targetWeek) return false;
+		const source = findTask(sourceWeek.tasks, dragId);
+		const target = findTask(targetWeek.tasks, targetTaskId);
+		if (!source || !target || target.status === 'dropped') return false;
+		return findTask(source.children, targetTaskId) === null;
+	}
+
+	setTaskDropTarget(targetTaskId: string): void {
+		if (!this.canDropOnTask(targetTaskId)) return;
+		this.dropTaskId = targetTaskId;
+		this.dropWeekId = '';
+	}
+
+	clearTaskDropTarget(targetTaskId: string): void {
+		if (this.dropTaskId === targetTaskId) this.dropTaskId = '';
+	}
+
+	setWeekDropTarget(weekId: string): void {
+		if (!this.draggingTaskId || this.dropTaskId) return;
+		this.dropWeekId = weekId;
+	}
+
+	clearWeekDropTarget(weekId: string): void {
+		if (this.dropWeekId === weekId) this.dropWeekId = '';
+	}
+
+	async dropOnTask(targetTaskId: string): Promise<void> {
+		const dragId = this.draggingTaskId;
+		if (!dragId || !this.canDropOnTask(targetTaskId)) {
+			this.endTaskDrag();
+			return;
+		}
+		const sourceWeek = this.weekOfTask(dragId);
+		const targetWeek = this.weekOfTask(targetTaskId);
+		this.endTaskDrag();
+		if (!sourceWeek || !targetWeek) return;
+		if (sourceWeek.id !== targetWeek.id) {
+			await this.moveTaskToWeek(dragId, targetWeek.id, targetTaskId);
+			return;
+		}
+		const task = removeTask(sourceWeek.tasks, dragId);
+		const parent = findTask(sourceWeek.tasks, targetTaskId);
+		if (!task || !parent) return;
+		parent.children.push(task);
+		task.updatedAt = nowISO();
+		recomputeParents(sourceWeek.tasks);
+		this.markDirty(sourceWeek.id);
+	}
+
+	async dropOnWeek(weekId: string): Promise<void> {
+		const dragId = this.draggingTaskId;
+		const sourceWeek = dragId ? this.weekOfTask(dragId) : null;
+		const targetWeek = this.weekById(weekId);
+		this.endTaskDrag();
+		if (!dragId || !sourceWeek || !targetWeek) return;
+		if (sourceWeek.id !== targetWeek.id) {
+			await this.moveTaskToWeek(dragId, targetWeek.id);
+			return;
+		}
+		const found = locate(sourceWeek.tasks, dragId);
+		if (!found) return;
+		if (!found.parent && found.index === found.siblings.length - 1) return;
+		const task = removeTask(sourceWeek.tasks, dragId);
+		if (!task) return;
+		sourceWeek.tasks.push(task);
+		task.updatedAt = nowISO();
+		recomputeParents(sourceWeek.tasks);
+		this.markDirty(sourceWeek.id);
+	}
+
+	openSettings(section = 'ai'): void {
+		this.settingsSection = section;
+		this.settingsOpen = true;
 	}
 
 	focusQuickAdd(): void {

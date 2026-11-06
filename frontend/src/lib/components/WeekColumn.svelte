@@ -36,7 +36,28 @@
 		</div>
 	</header>
 
-	<div class="min-h-32 flex-1 px-1.5 py-2 sm:min-h-48">
+	<div
+		role="group"
+		class="min-h-32 flex-1 rounded-b-xl px-1.5 py-2 transition-colors sm:min-h-48 {app.dropWeekId ===
+		week.id
+			? 'bg-primary/5 ring-2 ring-primary/40 ring-inset'
+			: ''}"
+		ondragover={(event) => {
+			if (!app.draggingTaskId) return;
+			event.preventDefault();
+			if (event.dataTransfer) event.dataTransfer.dropEffect = 'move';
+			app.setWeekDropTarget(week.id);
+		}}
+		ondragleave={(event) => {
+			const related = event.relatedTarget as Node | null;
+			if (related && event.currentTarget.contains(related)) return;
+			app.clearWeekDropTarget(week.id);
+		}}
+		ondrop={(event) => {
+			event.preventDefault();
+			void app.dropOnWeek(week.id);
+		}}
+	>
 		{#if rows.length === 0}
 			<div class="flex flex-col items-center gap-2 px-3 py-8 text-center">
 				<p class="text-xs text-muted-foreground">

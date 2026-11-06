@@ -433,3 +433,90 @@ func TestCategoryMigration(t *testing.T) {
 		t.Fatalf("persisted migration = %+v", document)
 	}
 }
+
+func TestMoveTaskUnderParent(t *testing.T) {
+	st, err := New(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	now := time.Date(2026, 11, 5, 12, 0, 0, 0, time.Local)
+	week, err := todo.NewWeek("2026-W45", now)
+	if err != nil {
+		t.Fatal(err)
+	}
+	week.Tasks = []*model.Task{
+		{ID: "parent", Text: "parent", Status: model.StatusTodo, Day: "2026-11-05", Children: []*model.Task{
+			{ID: "child", Text: "child", Status: model.StatusTodo, Day: "2026-11-06", Children: []*model.Task{}},
+		}},
+		{ID: "target", Text: "target", Status: model.StatusTodo, Children: []*model.Task{}},
+		{ID: "dropped", Text: "dropped", Status: model.StatusDropped, Children: []*model.Task{}},
+	}
+	if _, err := st.SaveWeekInCategory(model.DefaultCategoryID, week); err != nil {
+		t.Fatal(err)
+	}
+
+	saved, _, err := st.MoveTaskUnder(model.DefaultCategoryID, "2026-W45", "parent", "2026-W45", "target", now)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(saved.Tasks) != 2 {
+		t.Fatalf("root tasks = %+v", saved.Tasks)
+	}
+	target := saved.Tasks[0]
+	if target.ID != "target" || len(target.Children) != 1 || target.Children[0].ID != "parent" {
+		t.Fatalf("target = %+v", target)
+	}
+	if target.Children[0].Day != "2026-11-05" {
+		t.Fatalf("same-week reparent must keep the date: %+v", target.Children[0])
+	}
+
+	if _, _, err := st.MoveTaskUnder(model.DefaultCategoryID, "2026-W45", "parent", "2026-W45", "child", now); !errors.Is(err, ErrMoveCycle) {
+		t.Fatalf("cycle err = %v", err)
+	}
+	if _, _, err := st.MoveTaskUnder(model.DefaultCategoryID, "2026-W45", "parent", "2026-W45", "dropped", now); !errors.Is(err, ErrParentTaskDropped) {
+		t.Fatalf("dropped parent err = %v", err)
+	}
+
+	targetWeek, sourceWeek, err := st.MoveTaskUnder(model.DefaultCategoryID, "2026-W45", "parent", "2026-W46", "target2", now)
+	if err == nil {
+		t.Fatalf("expected missing parent error, got %+v %+v", targetWeek, sourceWeek)
+	}
+	if !errors.Is(err, ErrParentTaskNotFound) {
+		t.Fatalf("missing parent err = %v", err)
+	}
+}
+
+func TestMoveTaskUnderParentCrossWeek(t *testing.T) {
+	st, err := New(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	now := time.Date(2026, 11, 5, 12, 0, 0, 0, time.Local)
+	source, _ := todo.NewWeek("2026-W45", now)
+	source.Tasks = []*model.Task{{ID: "moving", Text: "moving", Status: model.StatusTodo, Day: "2026-11-05", Children: []*model.Task{
+		{ID: "child", Text: "child", Status: model.StatusTodo, Day: "2026-11-06", Children: []*model.Task{}},
+	}}}
+	target, _ := todo.NewWeek("2026-W46", now)
+	target.Tasks = []*model.Task{{ID: "host", Text: "host", Status: model.StatusTodo, Children: []*model.Task{}}}
+	if _, err := st.SaveWeekInCategory(model.DefaultCategoryID, source); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := st.SaveWeekInCategory(model.DefaultCategoryID, target); err != nil {
+		t.Fatal(err)
+	}
+
+	from, to, err := st.MoveTaskUnder(model.DefaultCategoryID, "2026-W45", "moving", "2026-W46", "host", now)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(from.Tasks) != 0 {
+		t.Fatalf("source = %+v", from.Tasks)
+	}
+	if len(to.Tasks) != 1 || len(to.Tasks[0].Children) != 1 {
+		t.Fatalf("target = %+v", to.Tasks)
+	}
+	moved := to.Tasks[0].Children[0]
+	if moved.ID != "moving" || moved.Day != "" || moved.Children[0].Day != "" {
+		t.Fatalf("moved = %+v", moved)
+	}
+}

@@ -24,6 +24,18 @@
 	async function next(): Promise<void> {
 		await app.goRelative(1);
 	}
+
+	const versionLabel = $derived.by(() => {
+		const version = app.meta?.version?.trim();
+		if (!version || version === 'dev' || version === 'unknown') return 'dev';
+		return version.startsWith('v') ? version : `v${version}`;
+	});
+
+	const versionTitle = $derived.by(() => {
+		const parts = ['WeekTodo', app.meta?.version || 'dev'];
+		if (app.meta?.commit && app.meta.commit !== 'unknown') parts.push(app.meta.commit.slice(0, 7));
+		return parts.join(' · ');
+	});
 </script>
 
 <header class="sticky top-0 z-30 border-b bg-background/85 backdrop-blur">
@@ -38,6 +50,14 @@
 			>
 				<Logo size={30} />
 				<span class="hidden text-[15px] font-semibold tracking-tight lg:block">WeekTodo</span>
+			</button>
+			<button
+				type="button"
+				class="hidden shrink-0 rounded px-1 py-0.5 text-[11px] text-muted-foreground transition-colors hover:bg-muted hover:text-foreground lg:block"
+				title={versionTitle}
+				onclick={() => app.openSettings('update')}
+			>
+				{versionLabel}
 			</button>
 
 			<div class="flex min-w-0 items-center">
@@ -156,7 +176,7 @@
 				<Button
 					variant="ghost"
 					size="icon-sm"
-					onclick={() => (app.settingsOpen = true)}
+					onclick={() => app.openSettings('ai')}
 					title={t('设置')}
 				>
 					<Settings />

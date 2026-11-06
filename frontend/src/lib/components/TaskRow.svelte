@@ -3,6 +3,7 @@
 	import ArrowDownToLine from '@lucide/svelte/icons/arrow-down-to-line';
 	import ArrowLeft from '@lucide/svelte/icons/arrow-left';
 	import ArrowRight from '@lucide/svelte/icons/arrow-right';
+	import GripVertical from '@lucide/svelte/icons/grip-vertical';
 	import ArrowUp from '@lucide/svelte/icons/arrow-up';
 	import Ban from '@lucide/svelte/icons/ban';
 	import MoreHorizontal from '@lucide/svelte/icons/more-horizontal';
@@ -104,10 +105,52 @@
 </script>
 
 <div
-	class="group/row relative flex items-start gap-2 rounded-lg py-1 pr-2 transition-colors hover:bg-muted/55 focus-within:bg-muted/40"
+	class="group/row relative flex items-start gap-1 rounded-lg py-1 pr-2 transition-colors hover:bg-muted/55 focus-within:bg-muted/40 {app.dropTaskId ===
+	task.id
+		? 'bg-primary/5 ring-2 ring-primary/50 ring-inset'
+		: ''} {app.draggingTaskId === task.id ? 'opacity-50' : ''}"
 	style={`padding-left: ${0.5 + row.depth * 1.15}rem`}
 	data-depth={row.depth}
+	role="listitem"
+	ondragover={(event) => {
+		if (!app.draggingTaskId) return;
+		event.stopPropagation();
+		if (!app.canDropOnTask(task.id)) return;
+		event.preventDefault();
+		if (event.dataTransfer) event.dataTransfer.dropEffect = 'move';
+		app.setTaskDropTarget(task.id);
+	}}
+	ondragleave={(event) => {
+		const related = event.relatedTarget as Node | null;
+		if (related && event.currentTarget.contains(related)) return;
+		app.clearTaskDropTarget(task.id);
+	}}
+	ondrop={(event) => {
+		event.preventDefault();
+		event.stopPropagation();
+		void app.dropOnTask(task.id);
+	}}
 >
+	<div class="flex shrink-0 items-center pt-1.5">
+		<button
+			type="button"
+			draggable="true"
+			class="cursor-grab rounded p-0.5 text-muted-foreground/40 opacity-0 transition-opacity hover:text-muted-foreground group-hover/row:opacity-100 group-focus-within/row:opacity-100 active:cursor-grabbing"
+			title={t('拖动任务')}
+			aria-label={t('拖动任务')}
+			ondragstart={(event) => {
+				if (event.dataTransfer) {
+					event.dataTransfer.effectAllowed = 'move';
+					event.dataTransfer.setData('text/plain', task.id);
+				}
+				app.startTaskDrag(task.id);
+			}}
+			ondragend={() => app.endTaskDrag()}
+			onclick={(event) => event.preventDefault()}
+		>
+			<GripVertical class="size-4" />
+		</button>
+	</div>
 	<div class="pt-1.5">
 		<Checkbox
 			checked={done}

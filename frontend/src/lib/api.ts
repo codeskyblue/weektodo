@@ -122,11 +122,12 @@ export function moveTask(
 	category: string,
 	fromWeekId: string,
 	taskId: string,
-	toWeekId: string
+	toWeekId: string,
+	parentTaskId = ''
 ): Promise<{ from: Week; to: Week }> {
 	return request(withCategory(`/weeks/${encodeURIComponent(fromWeekId)}/move`, category), {
 		method: 'POST',
-		body: JSON.stringify({ taskId, toWeekId })
+		body: JSON.stringify({ taskId, toWeekId, parentTaskId })
 	});
 }
 

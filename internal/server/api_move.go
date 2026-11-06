@@ -21,8 +21,9 @@ func (s *Server) handleMoveTask(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var body struct {
-		TaskID   string `json:"taskId"`
-		ToWeekID string `json:"toWeekId"`
+		TaskID       string `json:"taskId"`
+		ToWeekID     string `json:"toWeekId"`
+		ParentTaskID string `json:"parentTaskId"`
 	}
 	if err := decodeJSON(w, r, &body); err != nil {
 		writeError(w, http.StatusBadRequest, "invalid_body", err.Error())
@@ -30,6 +31,7 @@ func (s *Server) handleMoveTask(w http.ResponseWriter, r *http.Request) {
 	}
 	body.TaskID = strings.TrimSpace(body.TaskID)
 	body.ToWeekID = strings.TrimSpace(body.ToWeekID)
+	body.ParentTaskID = strings.TrimSpace(body.ParentTaskID)
 	if body.TaskID == "" || body.ToWeekID == "" {
 		writeError(w, http.StatusBadRequest, "invalid_move", i18n.T(responseLanguage(w),
 			"请选择要移动的任务和目标周",
@@ -44,7 +46,7 @@ func (s *Server) handleMoveTask(w http.ResponseWriter, r *http.Request) {
 	}
 
 	lang := responseLanguage(w)
-	from, to, err := s.store.MoveTaskInCategory(category, fromID, body.TaskID, body.ToWeekID, time.Now())
+	from, to, err := s.store.MoveTaskUnder(category, fromID, body.TaskID, body.ToWeekID, body.ParentTaskID, time.Now())
 	switch {
 	case errors.Is(err, store.ErrSameWeek):
 		writeError(w, http.StatusBadRequest, "invalid_move", i18n.T(lang,
@@ -60,6 +62,21 @@ func (s *Server) handleMoveTask(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusNotFound, "not_found", i18n.T(lang,
 			"任务不存在",
 			"Task not found"))
+		return
+	case errors.Is(err, store.ErrParentTaskNotFound):
+		writeError(w, http.StatusNotFound, "not_found", i18n.T(lang,
+			"目标任务不存在",
+			"Target task not found"))
+		return
+	case errors.Is(err, store.ErrParentTaskDropped):
+		writeError(w, http.StatusBadRequest, "invalid_move", i18n.T(lang,
+			"不能移动到已废弃的任务下面",
+			"Cannot move a task under a dropped task"))
+		return
+	case errors.Is(err, store.ErrMoveCycle):
+		writeError(w, http.StatusBadRequest, "invalid_move", i18n.T(lang,
+			"不能把任务移动到它自己的子任务下面",
+			"Cannot move a task under its own subtask"))
 		return
 	case err != nil:
 		writeError(w, http.StatusBadRequest, "invalid_move", err.Error())

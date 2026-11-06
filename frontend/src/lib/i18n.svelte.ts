@@ -66,6 +66,7 @@ const en: Record<string, string> = {
 	'移到下一周': 'Move to next week',
 	'已移到 {week}': 'Moved to {week}',
 	'移动失败': 'Move failed',
+	'拖动任务': 'Drag task',
 	'界面语言': 'Interface language',
 	'简体中文': 'Chinese (Simplified)',
 	'English': 'English',

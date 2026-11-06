@@ -136,3 +136,41 @@ func TestOptionalMissingWeek(t *testing.T) {
 		t.Fatalf("plain missing week = %d", status)
 	}
 }
+
+func TestMoveTaskUnderParentEndpoint(t *testing.T) {
+	ts, _ := newTestServer(t)
+	putTasks(t, ts, "", "2026-W45", []map[string]any{
+		{"id": "parent", "text": "parent", "status": "todo", "day": "2026-11-05", "children": []any{}},
+		{"id": "target", "text": "target", "status": "todo", "children": []any{}},
+	})
+	status, raw := request(t, ts, http.MethodPost, "/api/weeks/2026-W45/move", map[string]any{
+		"taskId":       "parent",
+		"toWeekId":     "2026-W45",
+		"parentTaskId": "target",
+	})
+	if status != http.StatusOK {
+		t.Fatalf("same-week reparent: %d %s", status, raw)
+	}
+	week := decodeMap(t, raw)["to"].(map[string]any)
+	tasks := week["tasks"].([]any)
+	if len(tasks) != 1 {
+		t.Fatalf("tasks = %+v", tasks)
+	}
+	target := tasks[0].(map[string]any)
+	children := target["children"].([]any)
+	if len(children) != 1 || children[0].(map[string]any)["id"] != "parent" {
+		t.Fatalf("target children = %+v", children)
+	}
+	if children[0].(map[string]any)["day"] != "2026-11-05" {
+		t.Fatalf("same-week move must keep the date: %+v", children[0])
+	}
+
+	status, raw = request(t, ts, http.MethodPost, "/api/weeks/2026-W46/move", map[string]any{
+		"taskId":       "parent",
+		"toWeekId":     "2026-W45",
+		"parentTaskId": "child",
+	})
+	if status != http.StatusNotFound {
+		t.Fatalf("missing parent status = %d %s", status, raw)
+	}
+}

@@ -60,7 +60,27 @@
 				<FilterBar />
 			</div>
 			{#if app.weekSpan === 1}
-				<div class="flex-1 py-4">
+				<div
+					role="group"
+					class="flex-1 rounded-xl py-4 transition-colors {app.dropWeekId === app.anchorId
+						? 'bg-primary/5 ring-2 ring-primary/40 ring-inset'
+						: ''}"
+					ondragover={(event) => {
+						if (!app.draggingTaskId) return;
+						event.preventDefault();
+						if (event.dataTransfer) event.dataTransfer.dropEffect = 'move';
+						app.setWeekDropTarget(app.anchorId);
+					}}
+					ondragleave={(event) => {
+						const related = event.relatedTarget as Node | null;
+						if (related && event.currentTarget.contains(related)) return;
+						app.clearWeekDropTarget(app.anchorId);
+					}}
+					ondrop={(event) => {
+						event.preventDefault();
+						void app.dropOnWeek(app.anchorId);
+					}}
+				>
 					{#if rows.length === 0}
 						<EmptyState filtered={app.week.tasks.length > 0} />
 					{:else}

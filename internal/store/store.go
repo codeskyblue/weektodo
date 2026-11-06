@@ -39,6 +39,12 @@ var (
 	ErrCategoryNotFound = errors.New("category not found")
 	// ErrCategoryNameTaken is returned when a category name is already used.
 	ErrCategoryNameTaken = errors.New("category name already exists")
+	// ErrParentTaskNotFound is returned when the target parent task is missing.
+	ErrParentTaskNotFound = errors.New("parent task not found")
+	// ErrParentTaskDropped is returned when the target parent task is dropped.
+	ErrParentTaskDropped = errors.New("parent task is dropped")
+	// ErrMoveCycle is returned when a task is moved into its own subtree.
+	ErrMoveCycle = errors.New("cannot move a task into its own subtree")
 )
 
 // Store owns the JSON documents and serializes all access to them.
@@ -418,7 +424,14 @@ func (s *Store) MoveTask(fromID, taskID, toID string, now time.Time) (*model.Wee
 // MoveTaskInCategory moves one task subtree to another week in the same
 // category and persists both changes in a single write.
 func (s *Store) MoveTaskInCategory(category, fromID, taskID, toID string, now time.Time) (*model.Week, *model.Week, error) {
-	if fromID == toID {
+	return s.MoveTaskUnder(category, fromID, taskID, toID, "", now)
+}
+
+// MoveTaskUnder moves a task into another week and optionally under a parent
+// task. Same-week reparenting is allowed when parentTaskID is set.
+func (s *Store) MoveTaskUnder(category, fromID, taskID, toID, parentTaskID string, now time.Time) (*model.Week, *model.Week, error) {
+	parentTaskID = strings.TrimSpace(parentTaskID)
+	if fromID == toID && parentTaskID == "" {
 		return nil, nil, ErrSameWeek
 	}
 	s.mu.Lock()
@@ -435,8 +448,51 @@ func (s *Store) MoveTaskInCategory(category, fromID, taskID, toID string, now ti
 	if fromIndex < 0 {
 		return nil, nil, ErrWeekNotFound
 	}
-	toIndex := s.weekIndexLocked(category, toID)
+	if fromID == toID {
+		week := todo.CloneWeek(s.data.Weeks[fromIndex])
+		week.Category = category
+		task := todo.FindTask(week.Tasks, taskID)
+		if task == nil {
+			return nil, nil, ErrTaskNotFound
+		}
+		if parentTaskID != "" {
+			if todo.ContainsTask(task, parentTaskID) {
+				return nil, nil, ErrMoveCycle
+			}
+			parent := todo.FindTask(week.Tasks, parentTaskID)
+			if parent == nil {
+				return nil, nil, ErrParentTaskNotFound
+			}
+			if parent.Status == model.StatusDropped {
+				return nil, nil, ErrParentTaskDropped
+			}
+		}
+		remaining, moved, ok := todo.TakeTask(week.Tasks, taskID)
+		if !ok {
+			return nil, nil, ErrTaskNotFound
+		}
+		week.Tasks = remaining
+		todo.PrepareMovedTask(moved, now, false)
+		if parentTaskID == "" {
+			week.Tasks = append(week.Tasks, moved)
+		} else {
+			parent := todo.FindTask(week.Tasks, parentTaskID)
+			if parent == nil {
+				return nil, nil, ErrParentTaskNotFound
+			}
+			parent.Children = append(parent.Children, moved)
+		}
+		if err := todo.NormalizeWeek(week, now); err != nil {
+			return nil, nil, err
+		}
+		s.data.Weeks[fromIndex] = week
+		if err := s.saveDataLocked(); err != nil {
+			return nil, nil, err
+		}
+		return todo.CloneWeek(week), todo.CloneWeek(week), nil
+	}
 
+	toIndex := s.weekIndexLocked(category, toID)
 	from := todo.CloneWeek(s.data.Weeks[fromIndex])
 	var to *model.Week
 	if toIndex >= 0 {
@@ -451,13 +507,38 @@ func (s *Store) MoveTaskInCategory(category, fromID, taskID, toID string, now ti
 	from.Category = category
 	to.Category = category
 
-	remaining, task, ok := todo.TakeTask(from.Tasks, taskID)
+	task := todo.FindTask(from.Tasks, taskID)
+	if task == nil {
+		return nil, nil, ErrTaskNotFound
+	}
+	if parentTaskID != "" {
+		if todo.ContainsTask(task, parentTaskID) {
+			return nil, nil, ErrMoveCycle
+		}
+		parent := todo.FindTask(to.Tasks, parentTaskID)
+		if parent == nil {
+			return nil, nil, ErrParentTaskNotFound
+		}
+		if parent.Status == model.StatusDropped {
+			return nil, nil, ErrParentTaskDropped
+		}
+	}
+
+	remaining, moved, ok := todo.TakeTask(from.Tasks, taskID)
 	if !ok {
 		return nil, nil, ErrTaskNotFound
 	}
 	from.Tasks = remaining
-	todo.PrepareMovedTask(task, now)
-	to.Tasks = append(to.Tasks, task)
+	todo.PrepareMovedTask(moved, now, true)
+	if parentTaskID == "" {
+		to.Tasks = append(to.Tasks, moved)
+	} else {
+		parent := todo.FindTask(to.Tasks, parentTaskID)
+		if parent == nil {
+			return nil, nil, ErrParentTaskNotFound
+		}
+		parent.Children = append(parent.Children, moved)
+	}
 	if err := todo.NormalizeWeek(from, now); err != nil {
 		return nil, nil, err
 	}
