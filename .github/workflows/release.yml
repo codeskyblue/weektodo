@@ -70,7 +70,20 @@ jobs:
           hdiutil create -volname "WeekTodo" -srcfolder "${stage}" -ov -format UDZO \
             "dist/WeekTodo-desktop-mac-${VERSION}.dmg"
           rm -rf "${stage}"
-          (cd dist && shasum -a 256 weektodo-server-* WeekTodo-desktop-*.dmg > SHA256SUMS)
+      - name: Build Windows desktop app
+        env:
+          VERSION: ${{ github.ref_name }}
+          COMMIT: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          go install github.com/wailsapp/wails/v3/cmd/wails3@v3.0.0
+          export PATH="$(go env GOPATH)/bin:$PATH"
+          ./scripts/build-windows-app.sh
+          cp desktop/build/bin/windows/*.zip dist/
+      - name: Generate checksums
+        run: |
+          set -euo pipefail
+          (cd dist && shasum -a 256 weektodo-server-* WeekTodo-desktop-* WeekTodo-windows-* > SHA256SUMS)
       - name: Generate release notes
         run: ./scripts/release-notes.sh "${GITHUB_REF_NAME}" > "${RUNNER_TEMP}/release-notes.md"
       - uses: softprops/action-gh-release@v3

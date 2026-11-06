@@ -34,3 +34,8 @@ jobs:
         run: go vet ./...
       - name: Test
         run: go test ./...
+      - name: Build Windows package
+        run: |
+          go install github.com/wailsapp/wails/v3/cmd/wails3@v3.0.0
+          export PATH="$(go env GOPATH)/bin:$PATH"
+          ./scripts/build-windows-app.sh

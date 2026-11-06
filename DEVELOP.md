@@ -226,6 +226,22 @@ make desktop
 # desktop/build/bin/WeekTodo.app
 ```
 
+### Windows
+
+```bash
+make windows
+# desktop/build/bin/windows/WeekTodo-windows-<arch>-<version>.zip
+```
+
+- `scripts/build-windows-app.sh` 交叉编译 `amd64` 和 `arm64`。
+- 构建前用 `wails3 generate syso` 生成图标、DPI/兼容性 manifest 和版本信息，缺少 `wails3` 时回退到 `go run`。
+- 使用 `-H=windowsgui`，不会出现控制台窗口。
+- zip 内包含 `WeekTodo.exe` 和说明文件，免安装。
+- Windows 需要 WebView2 Evergreen 运行时，数据目录为 `%AppData%\weektodo`。
+- `desktop/build/windows/icon.ico` 和 `wails.exe.manifest` 纳入版本控制；`make icons` 可重新生成图标。
+- 目前桌面版自动更新只支持 macOS；Windows 桌面更新会返回“不支持”，需要后续单独实现。
+- Release workflow 会构建两种架构的 zip，并加入 `SHA256SUMS` 和 GitHub Release。
+
 构建脚本分别编译 `amd64` 和 `arm64`，用 `lipo` 合并，复制 `Info.plist` 和
 `AppIcon.icns`，最后 ad-hoc 签名。应用打开窗口时使用常规激活策略，出现在
 Dock、Cmd+Tab 和菜单栏；关闭窗口后切换为 Accessory，从 Dock/Cmd+Tab 移除，

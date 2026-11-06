@@ -62,7 +62,13 @@ make run
 # 构建 macOS 应用
 make desktop
 # 输出 desktop/build/bin/WeekTodo.app
+
+# 构建 Windows 桌面版（交叉编译）
+make windows
+# 输出 desktop/build/bin/windows/WeekTodo-windows-<arch>-<version>.zip
 ```
+
+Windows 版是免安装的便携包，解压后运行 `WeekTodo.exe`。需要 Microsoft Edge WebView2 Runtime（Windows 10/11 通常已安装），数据保存在 `%AppData%\weektodo`。
 
 开发模式（Vite HMR + Go 后端）：
 
@@ -168,7 +174,7 @@ scripts/              开发、打包、图标脚本
 
 ## 发布
 
-推送 `v*` tag 会触发 `.github/workflows/release.yml`，自动构建服务端二进制、universal macOS DMG、`SHA256SUMS` 和 `update.json`，并发布到 GitHub Releases：
+推送 `v*` tag 会触发 `.github/workflows/release.yml`，自动构建服务端二进制、universal macOS DMG、Windows amd64 / arm64 便携包、`SHA256SUMS` 和 `update.json`，并发布到 GitHub Releases：
 
 ```bash
 git tag v0.1.0

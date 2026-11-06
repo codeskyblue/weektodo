@@ -5,7 +5,7 @@ export GOTOOLCHAIN
 BIN := bin/weektodo
 LDFLAGS := -s -w -X main.version=$(VERSION) -X main.commit=$(COMMIT)
 
-.PHONY: all frontend build dev run test test-webdav check desktop icons clean
+.PHONY: all frontend build dev run test test-webdav check desktop windows icons clean
 
 all: build
 
@@ -36,8 +36,12 @@ check:
 desktop: frontend
 	VERSION=$(VERSION) COMMIT=$(COMMIT) ./scripts/build-macos-app.sh
 
+windows: frontend
+	VERSION=$(VERSION) COMMIT=$(COMMIT) ./scripts/build-windows-app.sh
+
 icons:
 	./scripts/make-icons.sh
 
 clean:
-	rm -rf bin frontend/.svelte-kit frontend/build desktop/build/bin desktop/build/windows
+	rm -rf bin frontend/.svelte-kit frontend/build desktop/build/bin
+	rm -f desktop/build/windows/*.syso
