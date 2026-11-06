@@ -234,7 +234,7 @@ make windows
 ```
 
 - `scripts/build-windows-app.sh` 交叉编译 `amd64` 和 `arm64`。
-- 构建前用 `wails3 generate syso` 生成图标、DPI/兼容性 manifest 和版本信息，缺少 `wails3` 时回退到 `go run`。
+- `cmd/windows-syso` 生成图标、DPI/兼容性 manifest 和版本信息，不依赖 Wails CLI，CI 和 Linux 交叉编译都能运行。
 - 使用 `-H=windowsgui`，不会出现控制台窗口。
 - zip 内包含 `WeekTodo.exe` 和说明文件，免安装。
 - Windows 需要 WebView2 Evergreen 运行时，数据目录为 `%AppData%\weektodo`。

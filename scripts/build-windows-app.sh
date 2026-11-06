@@ -34,12 +34,6 @@ cleanup() {
 }
 trap cleanup EXIT
 
-if command -v wails3 >/dev/null 2>&1; then
-	WAILS3=(wails3)
-else
-	WAILS3=(go run github.com/wailsapp/wails/v3/cmd/wails3@v3.0.0)
-fi
-
 cat > "${WORK}/info.json" <<EOF
 {
 	"fixed": {
@@ -63,12 +57,12 @@ EOF
 mkdir -p "${OUT}"
 for arch in ${ARCHS}; do
 	echo "Building Windows ${arch}..."
-	(cd "${DESKTOP}" && "${WAILS3[@]}" generate syso \
+	(cd "${ROOT}" && go run ./cmd/windows-syso \
 		-arch "${arch}" \
-		-icon build/windows/icon.ico \
-		-manifest build/windows/wails.exe.manifest \
+		-icon "${DESKTOP}/build/windows/icon.ico" \
+		-manifest "${DESKTOP}/build/windows/wails.exe.manifest" \
 		-info "${WORK}/info.json" \
-		-out "rsrc_windows_${arch}.syso")
+		-out "${DESKTOP}/rsrc_windows_${arch}.syso")
 
 	stage="${WORK}/stage-${arch}"
 	mkdir -p "${stage}"

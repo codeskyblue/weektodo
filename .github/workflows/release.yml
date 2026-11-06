@@ -76,8 +76,6 @@ jobs:
           COMMIT: ${{ github.sha }}
         run: |
           set -euo pipefail
-          go install github.com/wailsapp/wails/v3/cmd/wails3@v3.0.0
-          export PATH="$(go env GOPATH)/bin:$PATH"
           ./scripts/build-windows-app.sh
           cp desktop/build/bin/windows/*.zip dist/
       - name: Generate checksums
