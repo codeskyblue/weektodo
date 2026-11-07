@@ -230,7 +230,7 @@ make ios-package  # 生成 iOS .app
 - Wails asset handler 直接使用 `server.Handler()`，前端 `/api` 请求在 `wails://` 内进程内处理。
 - 桌面托盘、窗口尺寸、Dock 等 API 在 iOS 上是 no-op；Main 使用独立的移动入口，不启动托盘逻辑。
 - 首次构建需要 Xcode、iOS SDK 和 `wails3`；模拟器使用 ad-hoc 签名。
-- 设备/TestFlight 需要 Apple Development 证书和 Provisioning Profile，尚未接入。
+- 设备/TestFlight 需要 Apple Distribution 证书和 App Store Provisioning Profile。完整发布流程见 `docs/appstore/README.md`，签名打包使用 `make ios-ipa`。
 
 ## 桌面构建
 

@@ -71,7 +71,7 @@ make windows
 make ios
 ```
 
-iOS 版完全离线，数据保存在应用沙盒，可通过 WebDAV 与桌面版同步。当前为 Simulator 开发版，设备安装和 App Store 签名后续补充。
+iOS 版完全离线，数据保存在应用沙盒，可通过 WebDAV 与桌面版同步。Simulator 构建使用 `make ios`；App Store 签名、打包和上架流程见 [docs/appstore/README.md](docs/appstore/README.md)。
 
 Windows 版是免安装的便携包，解压后运行 `WeekTodo.exe`。需要 Microsoft Edge WebView2 Runtime（Windows 10/11 通常已安装），数据保存在 `%AppData%\weektodo`。
 

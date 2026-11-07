@@ -24,6 +24,9 @@ vars:
   PROVISIONING_PROFILE: '{{.PROVISIONING_PROFILE | default ""}}'
   # Optional entitlements applied at codesign time (generated default below)
   ENTITLEMENTS_FILE: '{{.ENTITLEMENTS_FILE | default "build/ios/entitlements.plist"}}'
+  # App Store marketing version and build number
+  APP_VERSION: '{{.APP_VERSION | default "0.3.0"}}'
+  APP_BUILD: '{{.APP_BUILD | default "1"}}'
   # SDK_PATH is computed lazily at task-level to avoid errors on non-macOS systems
 
 tasks:
@@ -123,6 +126,15 @@ tasks:
       - mkdir -p "{{.BIN_DIR}}/{{.APP_NAME}}.app"
       - cp "{{.BIN_DIR}}/{{.APP_NAME | lower}}" "{{.BIN_DIR}}/{{.APP_NAME}}.app/"
       - cp build/ios/Info.plist "{{.BIN_DIR}}/{{.APP_NAME}}.app/"
+      - cp build/ios/PrivacyInfo.xcprivacy "{{.BIN_DIR}}/{{.APP_NAME}}.app/"
+      - |
+        # Compile the launch storyboard so the app has a proper launch screen.
+        xcrun ibtool --compile "{{.BIN_DIR}}/{{.APP_NAME}}.app/LaunchScreen.storyboardc" build/ios/LaunchScreen.storyboard
+      - |
+        # Keep the marketing version in sync with the release while leaving
+        # the build number free to increase for every App Store upload.
+        /usr/libexec/PlistBuddy -c "Set :CFBundleShortVersionString {{.APP_VERSION}}" "{{.BIN_DIR}}/{{.APP_NAME}}.app/Info.plist"
+        /usr/libexec/PlistBuddy -c "Set :CFBundleVersion {{.APP_BUILD}}" "{{.BIN_DIR}}/{{.APP_NAME}}.app/Info.plist"
       - |
         # Embed the provisioning profile for device builds when provided
         if [ "{{.IOS_PLATFORM}}" = "device" ] && [ -n "{{.PROVISIONING_PROFILE}}" ]; then
@@ -157,10 +169,26 @@ tasks:
         # builds need a real identity (and usually entitlements + profile).
         # Entitlements are only applied to device builds - simulator bundles
         # must not carry them (SpringBoard refuses to launch the app).
-        if [ "{{.IOS_PLATFORM}}" = "device" ] && [ -f "{{.ENTITLEMENTS_FILE}}" ]; then
-          codesign --force --sign "{{.CODESIGN_IDENTITY}}" --entitlements "{{.ENTITLEMENTS_FILE}}" "{{.BIN_DIR}}/{{.APP_NAME}}.app"
+        APP="{{.BIN_DIR}}/{{.APP_NAME}}.app"
+        if [ "{{.IOS_PLATFORM}}" = "device" ]; then
+          ENT="{{.ENTITLEMENTS_FILE}}"
+          if [ -n "{{.PROVISIONING_PROFILE}}" ]; then
+            # Use the exact entitlements from the App Store provisioning
+            # profile so the signature matches what Apple expects.
+            TMP_PROFILE=$(mktemp)
+            security cms -D -i "{{.PROVISIONING_PROFILE}}" > "$TMP_PROFILE"
+            /usr/libexec/PlistBuddy -x -c 'Print :Entitlements' "$TMP_PROFILE" > "$APP/entitlements.plist"
+            ENT="$APP/entitlements.plist"
+            rm -f "$TMP_PROFILE"
+          fi
+          if [ -f "$ENT" ]; then
+            codesign --force --sign "{{.CODESIGN_IDENTITY}}" --entitlements "$ENT" --timestamp "$APP"
+          else
+            codesign --force --sign "{{.CODESIGN_IDENTITY}}" --timestamp "$APP"
+          fi
+          rm -f "$APP/entitlements.plist"
         else
-          codesign --force --sign "{{.CODESIGN_IDENTITY}}" "{{.BIN_DIR}}/{{.APP_NAME}}.app"
+          codesign --force --sign "{{.CODESIGN_IDENTITY}}" "$APP"
         fi
 
   deploy-simulator:
