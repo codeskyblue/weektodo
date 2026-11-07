@@ -145,11 +145,11 @@
 
 <div
 	bind:this={rowEl}
-	class="group/row relative flex items-start gap-1 rounded-lg py-1 pr-2 transition-colors hover:bg-muted/55 focus-within:bg-muted/40 {app.dropTaskId ===
+	class="group/row relative flex min-h-11 items-center gap-1 rounded-none border-b border-border/50 py-0.5 pr-1 pl-[calc(var(--row-indent)*0.8)] transition-colors hover:bg-muted/55 focus-within:bg-muted/40 last:border-b-0 sm:min-h-0 sm:items-start sm:rounded-lg sm:border-0 sm:py-1 sm:pr-2 sm:pl-[var(--row-indent)] {app.dropTaskId ===
 	task.id
 		? 'bg-primary/5 ring-2 ring-primary/50 ring-inset'
 		: ''} {app.draggingTaskId === task.id ? 'opacity-50' : ''}"
-	style={`padding-left: ${0.5 + row.depth * 1.15}rem`}
+	style={`--row-indent: ${0.5 + row.depth * 1.15}rem`}
 	data-depth={row.depth}
 	role="listitem"
 	ondragover={(event) => {
@@ -171,7 +171,7 @@
 		void app.dropOnTask(task.id);
 	}}
 >
-	<div class="flex shrink-0 items-center pt-1.5">
+	<div class="hidden shrink-0 items-center pt-1.5 sm:flex">
 		<button
 			type="button"
 			draggable="true"
@@ -185,18 +185,19 @@
 			<GripVertical class="size-4" />
 		</button>
 	</div>
-	<div class="pt-1.5">
+	<div class="flex shrink-0 items-center sm:pt-1.5">
 		<Checkbox
 			checked={done}
 			{indeterminate}
 			disabled={dropped}
 			onCheckedChange={() => app.toggleTask(task.id)}
+			class="max-sm:size-5 max-sm:after:-inset-x-3 max-sm:after:-inset-y-3"
 			aria-label={done ? t('取消完成 {title}', { title: task.text || t('任务') }) : t('完成 {title}', { title: task.text || t('任务') })}
 		/>
 	</div>
 
 	<div class="min-w-0 flex-1">
-		<div class="flex min-h-7 items-center gap-1">
+		<div class="flex min-h-10 items-center gap-1 sm:min-h-7">
 			{#if task.carriedFrom}
 				<ArrowDownToLine
 					class="size-3.5 shrink-0 text-muted-foreground/70"
@@ -213,7 +214,7 @@
 				autocomplete="off"
 				spellcheck="false"
 				placeholder={t('写点什么…')}
-				class="h-7 min-w-0 flex-1 rounded-md border-0 bg-transparent px-1 text-sm outline-none placeholder:text-muted-foreground/50 focus:bg-background/70 focus:ring-0 {done
+				class="h-10 min-w-0 flex-1 rounded-md border-0 bg-transparent px-1.5 text-base outline-none placeholder:text-muted-foreground/50 focus:bg-background/70 focus:ring-0 sm:h-7 sm:px-1 sm:text-sm {done
 					? 'text-muted-foreground line-through decoration-muted-foreground/50'
 					: ''} {dropped
 					? 'text-muted-foreground/60 line-through decoration-muted-foreground/40'
@@ -245,7 +246,7 @@
 								variant="ghost"
 								size="icon-xs"
 								title={t('任务操作')}
-								class="text-muted-foreground"
+								class="text-muted-foreground max-sm:size-9 max-sm:rounded-lg"
 							>
 								<MoreHorizontal />
 							</Button>

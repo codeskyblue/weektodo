@@ -80,6 +80,7 @@
 					<Button
 						variant="ghost"
 						size="icon-sm"
+						class="max-sm:size-10"
 						onclick={copyReport}
 						disabled={!app.reportText}
 						title={t('复制 Markdown')}
@@ -89,6 +90,7 @@
 					<Button
 						variant="ghost"
 						size="icon-sm"
+						class="max-sm:size-10"
 						onclick={downloadReport}
 						disabled={!app.reportText}
 						title={t('下载 Markdown')}
@@ -118,6 +120,7 @@
 				<Button
 					variant="outline"
 					size="sm"
+					class="max-sm:h-9"
 					onclick={() => app.polishReport()}
 					disabled={app.aiLoading || app.reportLoading || !app.reportMarkdown}
 				>
@@ -130,7 +133,7 @@
 			</div>
 		</div>
 
-		<div class="flex-1 overflow-y-auto px-5 py-4">
+		<div class="flex-1 overflow-y-auto px-5 py-4 max-sm:pb-[calc(1rem+env(safe-area-inset-bottom))]">
 			{#if app.reportLoading}
 				<div class="space-y-3">
 					<Skeleton class="h-5 w-2/3" />

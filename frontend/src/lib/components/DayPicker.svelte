@@ -24,7 +24,7 @@
 				variant="ghost"
 				size="xs"
 				disabled={task.status === 'dropped'}
-				class="h-6 gap-1 px-1.5 text-xs font-normal text-muted-foreground hover:text-foreground"
+				class="h-9 gap-1 px-2 text-sm font-normal text-muted-foreground hover:text-foreground sm:h-6 sm:px-1.5 sm:text-xs"
 				title={t('设置日期')}
 			>
 				<CalendarDays class="size-3.5" />

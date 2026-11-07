@@ -91,15 +91,6 @@ export function formatWeekTitle(id: string): string {
 	return t('{year} 第 {week} 周', { year: weekYear(id), week: weekNumber(id) });
 }
 
-export function formatWeekTitleCompact(id: string): string {
-	return `${weekYear(id)}-W${String(weekNumber(id)).padStart(2, '0')}`;
-}
-
-export function formatRangeCompact(start: string, end: string): string {
-	const monthDay = (value: string) => `${Number(value.slice(5, 7))}.${Number(value.slice(8, 10))}`;
-	return `${monthDay(start)} – ${monthDay(end)}`;
-}
-
 export function isSameWeek(id: string, date = new Date()): boolean {
 	return id === weekIdFor(dateToISO(date));
 }

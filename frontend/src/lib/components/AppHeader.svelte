@@ -1,5 +1,6 @@
 <script lang="ts">
 	import Check from '@lucide/svelte/icons/check';
+	import ChevronDown from '@lucide/svelte/icons/chevron-down';
 	import ChevronLeft from '@lucide/svelte/icons/chevron-left';
 	import ChevronRight from '@lucide/svelte/icons/chevron-right';
 	import FileText from '@lucide/svelte/icons/file-text';
@@ -11,7 +12,7 @@
 	import { setMode, userPrefersMode } from 'mode-watcher';
 	import { app } from '#lib/app.svelte';
 	import { i18n, t } from '#lib/i18n.svelte';
-	import { formatRange, formatRangeCompact, formatWeekTitle, formatWeekTitleCompact } from '#lib/date';
+	import { formatRange, formatWeekTitle } from '#lib/date';
 	import Logo from './Logo.svelte';
 	import { Button } from '#lib/components/ui/button/index.js';
 	import { Progress } from '#lib/components/ui/progress/index.js';
@@ -38,16 +39,18 @@
 	});
 </script>
 
-<header class="sticky top-0 z-30 border-b bg-background/85 backdrop-blur">
+<header
+	class="sticky top-0 z-30 border-b bg-background/90 pt-[env(safe-area-inset-top)] backdrop-blur"
+>
 	<div
 		class="mx-auto w-full px-4 py-3 sm:px-6"
 		class:max-w-6xl={app.weekSpan === 1}
 		class:max-w-7xl={app.weekSpan > 1}
 	>
-		<div class="flex items-center gap-3">
+		<div class="flex flex-wrap items-center gap-x-2 gap-y-1.5 sm:flex-nowrap sm:gap-3">
 			<button
 				type="button"
-				class="flex min-w-0 items-center gap-2.5 rounded-md outline-none focus-visible:ring-2 focus-visible:ring-ring"
+				class="order-1 flex size-10 shrink-0 items-center justify-center rounded-xl outline-none focus-visible:ring-2 focus-visible:ring-ring sm:size-auto sm:justify-start sm:gap-2.5 sm:rounded-md"
 				onclick={() => app.goToday()}
 				aria-label={t('WeekTodo 首页')}
 				title={t('回到本周')}
@@ -57,25 +60,31 @@
 			</button>
 			<button
 				type="button"
-				class="hidden shrink-0 rounded px-1 py-0.5 text-[11px] text-muted-foreground transition-colors hover:bg-muted hover:text-foreground lg:block"
+				class="order-1 hidden shrink-0 rounded px-1 py-0.5 text-[11px] text-muted-foreground transition-colors hover:bg-muted hover:text-foreground lg:block"
 				title={versionTitle}
 				onclick={() => app.openSettings('update')}
 			>
 				{versionLabel}
 			</button>
 
-			<div class="flex min-w-0 items-center">
+			<div class="order-2 flex min-w-0 items-center">
 				<DropdownMenu.Root>
 					<DropdownMenu.Trigger>
 						{#snippet child({ props })}
-							<Button {...props} variant="ghost" size="sm" class="max-w-24 gap-1.5 px-2 sm:max-w-36">
+							<Button
+								{...props}
+								variant="ghost"
+								size="sm"
+								class="h-10 max-w-44 gap-1.5 rounded-full border border-border/70 px-3 sm:h-7 sm:max-w-36 sm:rounded-md sm:border-0 sm:px-2"
+							>
 								<span
 									class="size-2.5 shrink-0 rounded-full"
 									style={`background-color: ${app.activeCategory?.color || '#3b82f6'}`}
 								></span>
-								<span class="hidden truncate text-xs font-medium sm:inline">
+								<span class="truncate text-sm font-medium sm:text-xs">
 									{app.activeCategory?.name ?? t('分类')}
 								</span>
+								<ChevronDown class="size-3.5 shrink-0 text-muted-foreground sm:hidden" />
 							</Button>
 						{/snippet}
 					</DropdownMenu.Trigger>
@@ -96,37 +105,43 @@
 				</DropdownMenu.Root>
 			</div>
 
-			<div class="ml-1 flex min-w-0 items-center gap-1">
+			<div
+				class="order-4 flex w-full min-w-0 items-center gap-1 sm:order-3 sm:ml-1 sm:w-auto"
+			>
 				<Button
 					variant="ghost"
 					size="icon-sm"
+					class="size-10 sm:size-7"
 					onclick={previous}
 					disabled={app.navigating || !app.week}
 					title={t('上一周')}
 				>
 					<ChevronLeft />
 				</Button>
-				<div class="min-w-0 px-1 text-center sm:px-2">
+				<button
+					type="button"
+					class="min-w-0 flex-1 rounded-lg px-2 py-1 text-center outline-none transition-colors hover:bg-muted/50 focus-visible:ring-2 focus-visible:ring-ring sm:flex-none sm:hover:bg-transparent"
+					onclick={() => app.goToday()}
+					title={t('回到本周')}
+				>
 					{#if app.week}
-						<div class="truncate text-sm font-medium sm:hidden">
-							{formatWeekTitleCompact(app.week.id)}
-						</div>
-						<div class="hidden truncate text-sm font-medium sm:block">
+						<div class="truncate text-[15px] font-semibold sm:text-sm sm:font-medium">
 							{formatWeekTitle(app.week.id)}
 						</div>
-						<div class="truncate text-xs text-muted-foreground sm:hidden">
-							{formatRangeCompact(app.week.start, app.week.end)}
-						</div>
-						<div class="hidden truncate text-xs text-muted-foreground sm:block">
+						<div class="truncate text-xs text-muted-foreground">
 							{formatRange(app.week.start, app.week.end)}
+							{#if app.stats.total > 0}
+								<span class="tabular-nums sm:hidden"> · {app.stats.done}/{app.stats.total}</span>
+							{/if}
 						</div>
 					{:else}
 						<div class="text-sm text-muted-foreground">{t('加载中…')}</div>
 					{/if}
-				</div>
+				</button>
 				<Button
 					variant="ghost"
 					size="icon-sm"
+					class="size-10 sm:size-7"
 					onclick={next}
 					disabled={app.navigating || !app.week}
 					title={t('下一周')}
@@ -134,13 +149,19 @@
 					<ChevronRight />
 				</Button>
 				{#if app.week && !app.isCurrentWeek}
-					<Button variant="outline" size="xs" class="ml-1" onclick={() => app.goToday()}>
-						{t('回到本周')}
+					<Button
+						variant="outline"
+						size="xs"
+						class="h-9 px-2.5 sm:ml-1 sm:h-6"
+						onclick={() => app.goToday()}
+					>
+						<span class="sm:hidden">{t('本周')}</span>
+						<span class="hidden sm:inline">{t('回到本周')}</span>
 					</Button>
 				{/if}
 			</div>
 
-			<div class="ml-auto flex items-center gap-1.5">
+			<div class="order-3 ml-auto flex items-center gap-1.5 sm:order-4">
 				<div class="mr-1 hidden items-center gap-2 md:flex">
 					{#if app.saveStatus === 'saving'}
 						<span class="text-xs text-muted-foreground">{t('保存中…')}</span>
@@ -181,21 +202,30 @@
 						</button>
 					{/each}
 				</div>
-				<Button variant="outline" size="sm" onclick={() => app.openReport()}>
+				<Button
+					variant="outline"
+					size="sm"
+					class="max-sm:size-10 max-sm:rounded-xl sm:rounded-lg"
+					onclick={() => app.openReport()}
+					aria-label={t('周报')}
+				>
 					<FileText />
 					<span class="hidden sm:inline">{t('周报')}</span>
 				</Button>
 				<Button
 					variant="ghost"
 					size="icon-sm"
+					class="max-sm:size-10 max-sm:rounded-xl"
 					onclick={() => app.openSettings('ai')}
 					title={t('设置')}
+					aria-label={t('设置')}
 				>
 					<Settings />
 				</Button>
 				<Button
 					variant="ghost"
 					size="icon-sm"
+					class="hidden sm:inline-flex"
 					onclick={() => app.setLanguage(i18n.language === 'zh' ? 'en' : 'zh')}
 					title={t('切换语言')}
 					aria-label={t('切换语言')}

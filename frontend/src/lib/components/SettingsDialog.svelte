@@ -10,6 +10,7 @@
 	import Moon from '@lucide/svelte/icons/moon';
 	import RefreshCw from '@lucide/svelte/icons/refresh-cw';
 	import Sun from '@lucide/svelte/icons/sun';
+	import X from '@lucide/svelte/icons/x';
 	import { toast } from 'svelte-sonner';
 	import { setMode, userPrefersMode } from 'mode-watcher';
 	import * as api from '#lib/api';
@@ -376,22 +377,40 @@
 </script>
 
 <Dialog.Root bind:open={app.settingsOpen}>
-	<Dialog.Content class="max-h-[88vh] sm:max-w-3xl">
-		<Dialog.Header>
-			<Dialog.Title>{t('设置')}</Dialog.Title>
-			<Dialog.Description>{t('配置 AI 周报润色、WebDAV 同步、分类和界面外观。')}</Dialog.Description>
-		</Dialog.Header>
+	<Dialog.Content
+		class="max-h-[88vh] sm:max-w-3xl max-sm:top-0 max-sm:left-0 max-sm:h-dvh max-sm:max-h-dvh max-sm:w-full max-sm:max-w-none max-sm:translate-x-0 max-sm:translate-y-0 max-sm:flex max-sm:flex-col max-sm:gap-0 max-sm:rounded-none max-sm:p-0 max-sm:ring-0"
+		showCloseButton={false}
+	>
+		<div
+			class="flex items-start justify-between gap-2 max-sm:shrink-0 max-sm:border-b max-sm:px-4 max-sm:pb-3 max-sm:pt-[calc(0.75rem+env(safe-area-inset-top))]"
+		>
+			<Dialog.Header>
+				<Dialog.Title>{t('设置')}</Dialog.Title>
+				<Dialog.Description class="max-sm:hidden">{t('配置 AI 周报润色、WebDAV 同步、分类和界面外观。')}</Dialog.Description>
+			</Dialog.Header>
+			<Button
+				variant="ghost"
+				size="icon-sm"
+				class="max-sm:size-10"
+				onclick={() => (app.settingsOpen = false)}
+				aria-label={t('关闭')}
+			>
+				<X />
+			</Button>
+		</div>
 
-		<div class="grid gap-4 py-1 md:grid-cols-[10.5rem_1fr] md:gap-6">
+		<div
+			class="grid gap-4 py-1 md:grid-cols-[10.5rem_1fr] md:gap-6 max-sm:flex max-sm:min-h-0 max-sm:flex-1 max-sm:flex-col max-sm:gap-0 max-sm:py-0"
+		>
 			<nav
-				class="flex gap-1 overflow-x-auto md:flex-col md:overflow-visible"
+				class="flex gap-1 overflow-x-auto md:flex-col md:overflow-visible max-sm:shrink-0 max-sm:flex-wrap max-sm:overflow-visible max-sm:border-b max-sm:px-3 max-sm:py-2"
 				aria-label={t('设置导航')}
 			>
 				{#each sections as item (item.id)}
 					{#if !(app.meta?.mobile && item.id === 'update')}
 					<button
 						type="button"
-						class="shrink-0 rounded-md px-3 py-2 text-left text-sm text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+						class="shrink-0 rounded-md px-3 py-2 text-left text-sm text-muted-foreground transition-colors hover:bg-muted hover:text-foreground max-sm:h-10 max-sm:px-3"
 						class:bg-muted={section === item.id}
 						class:font-medium={section === item.id}
 						class:text-foreground={section === item.id}
@@ -406,7 +425,9 @@
 				{/each}
 			</nav>
 
-			<div class="max-h-[62vh] min-h-[22rem] space-y-3 overflow-y-auto pr-1">
+			<div
+				class="max-h-[62vh] min-h-[22rem] space-y-3 overflow-y-auto pr-1 max-sm:max-h-none max-sm:min-h-0 max-sm:flex-1 max-sm:space-y-4 max-sm:px-4 max-sm:py-4 max-sm:pr-4"
+			>
 			{#if section === 'ai'}
 			<section class="space-y-3">
 				<div class="flex items-center justify-between">
@@ -483,7 +504,7 @@
 								<Input
 									bind:value={modelFilter}
 									placeholder={t('筛选 {count} 个模型…', { count: modelOptions.length })}
-									class="h-7 text-xs"
+									class="h-7 text-base sm:text-xs"
 								/>
 							</div>
 							<div class="max-h-44 overflow-y-auto p-1">
@@ -902,9 +923,16 @@
 			</div>
 		</div>
 
-		<Dialog.Footer>
-			<Button variant="outline" size="sm" onclick={() => (app.settingsOpen = false)}>{t('关闭')}</Button>
-			<Button size="sm" onclick={save} disabled={saving}>
+		<Dialog.Footer
+			class="max-sm:mx-0 max-sm:mb-0 max-sm:shrink-0 max-sm:flex-col max-sm:rounded-none max-sm:border-t max-sm:bg-background max-sm:px-4 max-sm:py-3 max-sm:pb-[calc(0.75rem+env(safe-area-inset-bottom))]"
+		>
+			<Button
+				variant="outline"
+				size="sm"
+				class="max-sm:h-11 max-sm:flex-1"
+				onclick={() => (app.settingsOpen = false)}>{t('关闭')}</Button
+			>
+			<Button size="sm" class="max-sm:h-11 max-sm:flex-[2]" onclick={save} disabled={saving}>
 				{#if saving}<Loader2 class="animate-spin" /> {t('保存中…')}
 				{:else}{t('保存设置')}{/if}
 			</Button>

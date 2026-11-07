@@ -51,8 +51,8 @@
 
 <div
 	class={compact
-		? 'border-t px-2 py-2'
-		: 'sticky bottom-0 z-20 -mx-4 mt-6 border-t bg-background/90 px-4 py-3 backdrop-blur sm:-mx-6 sm:px-6'}
+		? 'border-t px-2 py-2 pb-[calc(0.5rem+env(safe-area-inset-bottom))]'
+		: 'sticky bottom-0 z-20 -mx-4 mt-6 border-t bg-background/90 px-4 py-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))] backdrop-blur sm:-mx-6 sm:px-6 sm:pb-3'}
 >
 	<form
 		class={compact ? 'flex items-center gap-1.5' : 'mx-auto flex w-full max-w-6xl items-center gap-2'}
@@ -67,7 +67,7 @@
 			placeholder={compact ? t('添加任务…') : t('添加任务，按 Enter 保存…')}
 			maxlength={500}
 			autocomplete="off"
-			class={compact ? 'h-8 text-xs' : 'h-9 flex-1 bg-background'}
+			class={compact ? 'h-10 text-base sm:h-8 sm:text-xs' : 'h-11 flex-1 bg-background sm:h-9'}
 		/>
 		<Popover.Root bind:open={dayOpen}>
 			<Popover.Trigger>
@@ -76,7 +76,7 @@
 						{...props}
 						variant="outline"
 						size={compact ? 'icon-sm' : 'sm'}
-						class={compact ? 'text-muted-foreground' : 'h-9 text-muted-foreground'}
+						class={compact ? 'text-muted-foreground' : 'h-11 text-muted-foreground sm:h-9'}
 						title={dayLabel}
 					>
 						<CalendarDays class="size-4" />
@@ -118,7 +118,7 @@
 				</Button>
 			</Popover.Content>
 		</Popover.Root>
-		<Button type="submit" size={compact ? 'icon-sm' : 'sm'} class={compact ? '' : 'h-9'} title={t('添加')}>
+		<Button type="submit" size={compact ? 'icon-sm' : 'sm'} class={compact ? '' : 'h-11 sm:h-9'} title={t('添加')}>
 			<Plus />
 			{#if !compact}{t('添加')}{/if}
 		</Button>
