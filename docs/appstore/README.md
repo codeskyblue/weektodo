@@ -50,6 +50,50 @@ App Store Connect → My Apps → `+` → New App：
 
 然后填写 `docs/appstore/metadata-zh.md` 和 `metadata-en.md` 中的信息。
 
+
+## 使用 fastlane + App Store Connect API Key（推荐）
+
+旧的 Apple ID 会话已过期，不再使用缓存登录。请用新的付费账号创建 App Store Connect API Key：
+
+1. 用新账号登录 [App Store Connect](https://appstoreconnect.apple.com)。
+2. Users and Access → Integrations → App Store Connect API → Team Keys → `+`。
+3. 角色选择 **Admin**，生成后下载 `AuthKey_<KEY_ID>.p8`（只能下载一次）。
+4. 记录 **Key ID** 和 **Issuer ID**，把 `.p8` 放到：
+
+   ```bash
+   mkdir -p ~/.appstoreconnect/private_keys
+   mv ~/Downloads/AuthKey_<KEY_ID>.p8 ~/.appstoreconnect/private_keys/
+   ```
+
+5. 设置环境变量（不要提交到仓库）：
+
+   ```bash
+   export ASC_KEY_ID="<KEY_ID>"
+   export ASC_ISSUER_ID="<ISSUER_ID>"
+   export ASC_KEY_FILEPATH="$HOME/.appstoreconnect/private_keys/AuthKey_<KEY_ID>.p8"
+   export TEAM_ID="<TEAM_ID>"   # 如 API Key 已限定团队，可留空
+   ```
+
+6. 创建 Apple Distribution 证书和 App Store Profile：
+
+   ```bash
+   fastlane setup_signing
+   ```
+
+7. 创建 App Store Connect App 记录（如果还没有）：
+
+   ```bash
+   fastlane create_app
+   ```
+
+8. 构建并上传到 TestFlight：
+
+   ```bash
+   IOS_VERSION=0.3.0 IOS_BUILD=1 fastlane beta
+   ```
+
+`fastlane beta` 会自动构建签名 IPA 并调用 `pilot` 上传。上传前也可以先用 `make ios-ipa` + `./scripts/check-ios-ipa.sh` 检查包。
+
 ## 4. 构建 App Store 包
 
 先确认前端、Go 测试通过：
