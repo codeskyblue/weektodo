@@ -83,6 +83,7 @@ export interface Meta {
 	dataDir: string;
 	version: string;
 	commit: string;
+	mobile?: boolean;
 	currentWeekId: string;
 }
 

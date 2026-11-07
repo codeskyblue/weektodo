@@ -1,0 +1,13 @@
+version: '3'
+
+tasks:
+  go:mod:tidy:
+    summary: Keep the mobile module tidy
+    internal: true
+    cmds:
+      - go mod tidy
+
+  build:frontend:
+    summary: Build the shared SvelteKit frontend
+    cmds:
+      - cd ../../frontend && npm run build

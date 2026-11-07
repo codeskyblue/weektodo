@@ -388,6 +388,7 @@
 				aria-label={t('设置导航')}
 			>
 				{#each sections as item (item.id)}
+					{#if !(app.meta?.mobile && item.id === 'update')}
 					<button
 						type="button"
 						class="shrink-0 rounded-md px-3 py-2 text-left text-sm text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
@@ -401,6 +402,7 @@
 					>
 						{t(item.label)}
 					</button>
+					{/if}
 				{/each}
 			</nav>
 
@@ -753,6 +755,21 @@
 						<Monitor /> {t('跟随系统')}
 					</Button>
 				</div>
+
+				<div class="mt-3 space-y-1.5">
+					<div class="text-xs font-medium">{t('显示周数')}</div>
+					<div class="flex gap-1.5">
+						{#each [1, 2, 3] as count (count)}
+							<Button
+								variant={app.weekSpan === count ? 'secondary' : 'outline'}
+								size="sm"
+								onclick={() => app.setWeekSpan(count as 1 | 2 | 3)}
+							>
+								{t('{count}周', { count })}
+							</Button>
+						{/each}
+					</div>
+				</div>
 			</section>
 
 			{/if}
@@ -780,7 +797,7 @@
 
 			{/if}
 
-			{#if section === 'update'}
+			{#if section === 'update' && !app.meta?.mobile}
 			<section class="space-y-2">
 				<div class="flex items-start justify-between gap-3">
 					<div>

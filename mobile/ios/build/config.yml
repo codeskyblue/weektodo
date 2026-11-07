@@ -1,0 +1,17 @@
+version: '3'
+
+info:
+  companyName: "uiautodev"
+  productName: "WeekTodo"
+  productIdentifier: "com.uiautodev.weektodo"
+  description: "Weekly task planner"
+  copyright: "Copyright WeekTodo"
+  comments: "Weekly task planner"
+  version: "0.3.0"
+
+ios:
+  bundleID: "com.uiautodev.weektodo"
+  displayName: "WeekTodo"
+  version: "0.3.0"
+  company: "uiautodev"
+  comments: "Weekly task planner"

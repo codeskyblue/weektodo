@@ -218,6 +218,20 @@ dav.PropfindStatus(405)  // 模拟不支持 PROPFIND 的服务器
 - `webdav.autoSync` 控制自动同步。前端在本地保存成功后防抖 8 秒触发，启动后触发一次，并用 5 分钟定时器拉取远端变化；执行前会先等待本地保存完成，同步后只刷新可见周，不重置筛选和当前编辑状态。
 - 自动同步只在应用运行时生效；窗口隐藏后 WebView 定时器可能被系统降频。
 
+## iOS 构建
+
+```bash
+make ios          # 构建并安装到当前 iOS Simulator
+make ios-package  # 生成 iOS .app
+```
+
+- 工程在 `mobile/ios`，独立 Go module，复用根项目的 Go 后端和前端。
+- `application.Mobile.StoragePath()` 作为数据目录，完全离线。
+- Wails asset handler 直接使用 `server.Handler()`，前端 `/api` 请求在 `wails://` 内进程内处理。
+- 桌面托盘、窗口尺寸、Dock 等 API 在 iOS 上是 no-op；Main 使用独立的移动入口，不启动托盘逻辑。
+- 首次构建需要 Xcode、iOS SDK 和 `wails3`；模拟器使用 ad-hoc 签名。
+- 设备/TestFlight 需要 Apple Development 证书和 Provisioning Profile，尚未接入。
+
 ## 桌面构建
 
 ```bash

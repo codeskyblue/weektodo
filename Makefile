@@ -5,7 +5,7 @@ export GOTOOLCHAIN
 BIN := bin/weektodo
 LDFLAGS := -s -w -X main.version=$(VERSION) -X main.commit=$(COMMIT)
 
-.PHONY: all frontend build dev run test test-webdav check desktop windows icons clean
+.PHONY: all frontend build dev run test test-webdav check desktop windows ios ios-package icons clean
 
 all: build
 
@@ -38,6 +38,12 @@ desktop: frontend
 
 windows: frontend
 	VERSION=$(VERSION) COMMIT=$(COMMIT) ./scripts/build-windows-app.sh
+
+ios:
+	cd mobile/ios && wails3 task ios:run
+
+ios-package:
+	cd mobile/ios && wails3 task ios:package
 
 icons:
 	./scripts/make-icons.sh

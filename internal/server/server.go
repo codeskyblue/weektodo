@@ -24,6 +24,7 @@ type Options struct {
 	Version string
 	Commit  string
 	Desktop bool
+	Mobile  bool
 	Updater *update.Client
 }
 
@@ -89,6 +90,7 @@ func (s *Server) handleMeta(w http.ResponseWriter, _ *http.Request) {
 		"dataDir":       s.store.Dir(),
 		"version":       s.options.Version,
 		"commit":        s.options.Commit,
+		"mobile":        s.options.Mobile,
 		"currentWeekId": currentWeekID(),
 	})
 }

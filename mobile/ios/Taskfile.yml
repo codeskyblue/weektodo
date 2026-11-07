@@ -1,0 +1,25 @@
+version: '3'
+
+vars:
+  APP_NAME: weektodo
+  BIN_DIR: bin
+
+includes:
+  common: ./build/Taskfile.yml
+  ios: ./build/ios/Taskfile.yml
+
+tasks:
+  build:
+    summary: Build the iOS app
+    cmds:
+      - task: ios:build
+
+  run:
+    summary: Run in the iOS Simulator
+    cmds:
+      - task: ios:run
+
+  package:
+    summary: Package a production iOS app
+    cmds:
+      - task: ios:package

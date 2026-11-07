@@ -11,7 +11,7 @@
 	import { setMode, userPrefersMode } from 'mode-watcher';
 	import { app } from '#lib/app.svelte';
 	import { i18n, t } from '#lib/i18n.svelte';
-	import { formatRange, formatWeekTitle } from '#lib/date';
+	import { formatRange, formatRangeCompact, formatWeekTitle, formatWeekTitleCompact } from '#lib/date';
 	import Logo from './Logo.svelte';
 	import { Button } from '#lib/components/ui/button/index.js';
 	import { Progress } from '#lib/components/ui/progress/index.js';
@@ -108,8 +108,16 @@
 				</Button>
 				<div class="min-w-0 px-1 text-center sm:px-2">
 					{#if app.week}
-						<div class="truncate text-sm font-medium">{formatWeekTitle(app.week.id)}</div>
-						<div class="truncate text-xs text-muted-foreground">
+						<div class="truncate text-sm font-medium sm:hidden">
+							{formatWeekTitleCompact(app.week.id)}
+						</div>
+						<div class="hidden truncate text-sm font-medium sm:block">
+							{formatWeekTitle(app.week.id)}
+						</div>
+						<div class="truncate text-xs text-muted-foreground sm:hidden">
+							{formatRangeCompact(app.week.start, app.week.end)}
+						</div>
+						<div class="hidden truncate text-xs text-muted-foreground sm:block">
 							{formatRange(app.week.start, app.week.end)}
 						</div>
 					{:else}
@@ -152,7 +160,7 @@
 					<Progress value={app.progress} class="w-20" />
 				</div>
 				<div
-					class="flex items-center rounded-md border bg-background p-0.5"
+					class="hidden items-center rounded-md border bg-background p-0.5 sm:flex"
 					role="group"
 					aria-label={t('显示周数')}
 				>
@@ -194,32 +202,34 @@
 				>
 					<Languages />
 				</Button>
-				<DropdownMenu.Root>
-					<DropdownMenu.Trigger>
-						{#snippet child({ props })}
-							<Button variant="ghost" size="icon-sm" title={t('切换主题')} {...props}>
-								{#if userPrefersMode.current === 'dark'}
-									<Moon />
-								{:else if userPrefersMode.current === 'light'}
-									<Sun />
-								{:else}
-									<Monitor />
-								{/if}
-							</Button>
-						{/snippet}
-					</DropdownMenu.Trigger>
-					<DropdownMenu.Content align="end" class="w-36">
-						<DropdownMenu.Item onSelect={() => setMode('light')}>
-							<Sun class="size-4" /> {t('浅色')}
-						</DropdownMenu.Item>
-						<DropdownMenu.Item onSelect={() => setMode('dark')}>
-							<Moon class="size-4" /> {t('深色')}
-						</DropdownMenu.Item>
-						<DropdownMenu.Item onSelect={() => setMode('system')}>
-							<Monitor class="size-4" /> {t('跟随系统')}
-						</DropdownMenu.Item>
-					</DropdownMenu.Content>
-				</DropdownMenu.Root>
+				<div class="hidden sm:block">
+					<DropdownMenu.Root>
+						<DropdownMenu.Trigger>
+							{#snippet child({ props })}
+								<Button variant="ghost" size="icon-sm" title={t('切换主题')} {...props}>
+									{#if userPrefersMode.current === 'dark'}
+										<Moon />
+									{:else if userPrefersMode.current === 'light'}
+										<Sun />
+									{:else}
+										<Monitor />
+									{/if}
+								</Button>
+							{/snippet}
+						</DropdownMenu.Trigger>
+						<DropdownMenu.Content align="end" class="w-36">
+							<DropdownMenu.Item onSelect={() => setMode('light')}>
+								<Sun class="size-4" /> {t('浅色')}
+							</DropdownMenu.Item>
+							<DropdownMenu.Item onSelect={() => setMode('dark')}>
+								<Moon class="size-4" /> {t('深色')}
+							</DropdownMenu.Item>
+							<DropdownMenu.Item onSelect={() => setMode('system')}>
+								<Monitor class="size-4" /> {t('跟随系统')}
+							</DropdownMenu.Item>
+						</DropdownMenu.Content>
+					</DropdownMenu.Root>
+				</div>
 			</div>
 		</div>
 	</div>

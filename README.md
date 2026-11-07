@@ -66,7 +66,12 @@ make desktop
 # 构建 Windows 桌面版（交叉编译）
 make windows
 # 输出 desktop/build/bin/windows/WeekTodo-desktop-windows-<arch>-<version>.zip
+
+# 构建并运行 iOS Simulator 版（需要 Xcode 和 wails3）
+make ios
 ```
+
+iOS 版完全离线，数据保存在应用沙盒，可通过 WebDAV 与桌面版同步。当前为 Simulator 开发版，设备安装和 App Store 签名后续补充。
 
 Windows 版是免安装的便携包，解压后运行 `WeekTodo.exe`。需要 Microsoft Edge WebView2 Runtime（Windows 10/11 通常已安装），数据保存在 `%AppData%\weektodo`。
 

@@ -232,7 +232,7 @@
 				</span>
 			{/if}
 			<div
-				class="flex shrink-0 items-center gap-0.5 {task.day
+				class="flex shrink-0 items-center gap-0.5 max-sm:opacity-100 {task.day
 					? ''
 					: 'opacity-0 group-hover/row:opacity-100 group-focus-within/row:opacity-100'}"
 			>

@@ -1,0 +1,5 @@
+
+bin/
+build/ios/xcode/
+build/ios/DerivedData/
+.task/
