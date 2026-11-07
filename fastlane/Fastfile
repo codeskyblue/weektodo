@@ -24,6 +24,12 @@ def signing_options(api_key, extra = {})
   options
 end
 
+def profile_path(profile)
+  return profile[:output_path] if profile.is_a?(Hash) && profile[:output_path]
+  return profile.first if profile.is_a?(Array)
+  profile.to_s
+end
+
 def distribution_identity(team_id = nil)
   command = +"security find-identity -v -p codesigning | grep 'Apple Distribution'"
   command << " | grep '(#{team_id})'" unless team_id.to_s.empty?
@@ -65,24 +71,8 @@ platform :ios do
     identity = distribution_identity(team_id)
 
     UI.success("Code signing identity: #{identity}")
-    UI.success("Provisioning profile: #{profile[:output_path]}")
+    UI.success("Provisioning profile: #{profile_path(profile)}")
     UI.message("Use these with: make ios-ipa IOS_SIGN_IDENTITY=... IOS_PROVISIONING_PROFILE=...")
-  end
-
-  desc "Create the App Store Connect app record (requires an API key)"
-  lane :create_app do
-    api_key = asc_api_key
-    UI.user_error!("Set the App Store Connect API key env vars first") if api_key.nil?
-
-    produce(
-      **signing_options(api_key, {
-        app_identifier: ENV.fetch("BUNDLE_ID", "com.uiautodev.weektodo"),
-        app_name: ENV.fetch("APP_NAME", "WeekTodo"),
-        language: ENV.fetch("APP_LANGUAGE", "zh-Hans"),
-        sku: ENV.fetch("APP_SKU", "weektodo-ios"),
-        team_id: ENV["TEAM_ID"]
-      })
-    )
   end
 
   desc "Build the signed IPA and upload it to TestFlight"
@@ -110,7 +100,7 @@ platform :ios do
       identity = distribution_identity(team_id)
       UI.user_error!("No Apple Distribution identity found") if identity.empty?
       ENV["IOS_SIGN_IDENTITY"] = identity
-      ENV["IOS_PROVISIONING_PROFILE"] = profile[:output_path]
+      ENV["IOS_PROVISIONING_PROFILE"] = profile_path(profile)
     end
 
     sh(
