@@ -20,6 +20,9 @@ vars:
   IOS_VERSION_MIN_FLAG: '{{if eq .IOS_PLATFORM "device"}}-miphoneos-version-min={{.MIN_IOS_VERSION}}{{else}}-mios-simulator-version-min={{.MIN_IOS_VERSION}}{{end}}'
   # "-" is ad-hoc signing: fine for the simulator, rejected by real devices.
   CODESIGN_IDENTITY: '{{.CODESIGN_IDENTITY | default "-"}}'
+  # Optional keychain containing the distribution identity. Useful when the
+  # login keychain is locked in a non-interactive/CI session.
+  CODESIGN_KEYCHAIN: '{{.CODESIGN_KEYCHAIN | default ""}}'
   # Optional path to a .mobileprovision embedded into device bundles
   PROVISIONING_PROFILE: '{{.PROVISIONING_PROFILE | default ""}}'
   # Optional entitlements applied at codesign time (generated default below)
@@ -136,6 +139,19 @@ tasks:
         /usr/libexec/PlistBuddy -c "Set :CFBundleShortVersionString {{.APP_VERSION}}" "{{.BIN_DIR}}/{{.APP_NAME}}.app/Info.plist"
         /usr/libexec/PlistBuddy -c "Set :CFBundleVersion {{.APP_BUILD}}" "{{.BIN_DIR}}/{{.APP_NAME}}.app/Info.plist"
       - |
+        # Record the actual Xcode/SDK used. App Store Connect checks these
+        # keys when enforcing the latest public Xcode requirement.
+        SDK_VERSION=$(xcrun --sdk {{.IOS_SDK}} --show-sdk-version)
+        XCODE_VERSION=$(xcodebuild -version | awk 'NR==1{print $2}')
+        XCODE_BUILD=$(xcodebuild -version | awk 'NR==2{print $3}')
+        DTXCODE=$(python3 -c "v='$XCODE_VERSION'.split('.'); print(int(v[0])*100 + (int(v[1]) if len(v) > 1 else 0)*10)")
+        INFO="{{.BIN_DIR}}/{{.APP_NAME}}.app/Info.plist"
+        /usr/libexec/PlistBuddy -c "Set :DTPlatformName {{.IOS_SDK}}" "$INFO"
+        /usr/libexec/PlistBuddy -c "Set :DTSDKName {{.IOS_SDK}}${SDK_VERSION}" "$INFO"
+        /usr/libexec/PlistBuddy -c "Set :DTPlatformVersion ${SDK_VERSION}" "$INFO"
+        /usr/libexec/PlistBuddy -c "Set :DTXcode ${DTXCODE}" "$INFO"
+        /usr/libexec/PlistBuddy -c "Set :DTXcodeBuild ${XCODE_BUILD}" "$INFO"
+      - |
         # Embed the provisioning profile for device builds when provided
         if [ "{{.IOS_PLATFORM}}" = "device" ] && [ -n "{{.PROVISIONING_PROFILE}}" ]; then
           cp "{{.PROVISIONING_PROFILE}}" "{{.BIN_DIR}}/{{.APP_NAME}}.app/embedded.mobileprovision"
@@ -172,21 +188,33 @@ tasks:
         APP="{{.BIN_DIR}}/{{.APP_NAME}}.app"
         if [ "{{.IOS_PLATFORM}}" = "device" ]; then
           ENT="{{.ENTITLEMENTS_FILE}}"
+          TMP_PROFILE=""
+          TMP_ENTITLEMENTS=""
           if [ -n "{{.PROVISIONING_PROFILE}}" ]; then
             # Use the exact entitlements from the App Store provisioning
-            # profile so the signature matches what Apple expects.
+            # profile so the signature matches what Apple expects. Keep the
+            # extracted plist outside the bundle: anything inside the bundle
+            # at signing time becomes a sealed resource.
             TMP_PROFILE=$(mktemp)
+            TMP_ENTITLEMENTS=$(mktemp)
             security cms -D -i "{{.PROVISIONING_PROFILE}}" > "$TMP_PROFILE"
-            /usr/libexec/PlistBuddy -x -c 'Print :Entitlements' "$TMP_PROFILE" > "$APP/entitlements.plist"
-            ENT="$APP/entitlements.plist"
-            rm -f "$TMP_PROFILE"
+            /usr/libexec/PlistBuddy -x -c 'Print :Entitlements' "$TMP_PROFILE" > "$TMP_ENTITLEMENTS"
+            ENT="$TMP_ENTITLEMENTS"
           fi
           if [ -f "$ENT" ]; then
-            codesign --force --sign "{{.CODESIGN_IDENTITY}}" --entitlements "$ENT" --timestamp "$APP"
+            if [ -n "{{.CODESIGN_KEYCHAIN}}" ]; then
+              codesign --keychain "{{.CODESIGN_KEYCHAIN}}" --force --sign "{{.CODESIGN_IDENTITY}}" --entitlements "$ENT" --timestamp "$APP"
+            else
+              codesign --force --sign "{{.CODESIGN_IDENTITY}}" --entitlements "$ENT" --timestamp "$APP"
+            fi
           else
-            codesign --force --sign "{{.CODESIGN_IDENTITY}}" --timestamp "$APP"
+            if [ -n "{{.CODESIGN_KEYCHAIN}}" ]; then
+              codesign --keychain "{{.CODESIGN_KEYCHAIN}}" --force --sign "{{.CODESIGN_IDENTITY}}" --timestamp "$APP"
+            else
+              codesign --force --sign "{{.CODESIGN_IDENTITY}}" --timestamp "$APP"
+            fi
           fi
-          rm -f "$APP/entitlements.plist"
+          rm -f "$TMP_PROFILE" "$TMP_ENTITLEMENTS"
         else
           codesign --force --sign "{{.CODESIGN_IDENTITY}}" "$APP"
         fi
