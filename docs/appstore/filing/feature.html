@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="zh-CN">
+	<head>
+		<meta charset="utf-8" />
+		<style>
+			* { box-sizing: border-box; }
+			html, body { margin: 0; width: 1200px; height: 600px; overflow: hidden; }
+			body {
+				font-family: -apple-system, BlinkMacSystemFont, 'PingFang SC', 'Hiragino Sans GB',
+					'Microsoft YaHei', sans-serif;
+				background:
+					radial-gradient(circle at 22% 45%, rgba(52, 211, 153, 0.2), transparent 28%),
+					linear-gradient(145deg, #27272a 0%, #18181b 55%, #09090b 100%);
+				color: #fafafa;
+				display: flex;
+				align-items: center;
+				padding: 0 86px;
+				gap: 46px;
+			}
+			.icon { width: 168px; height: 168px; border-radius: 38px; box-shadow: 0 24px 60px rgba(0,0,0,.5); }
+			.copy { display: flex; flex-direction: column; gap: 10px; }
+			.name { font-size: 72px; line-height: 1; font-weight: 750; letter-spacing: -1px; }
+			.tagline { font-size: 32px; color: #a1a1aa; }
+			.meta { margin-top: 8px; font-size: 24px; color: #34d399; letter-spacing: 1px; }
+		</style>
+	</head>
+	<body>
+		<img class="icon" src="icon-1024.png" alt="WeekTodo" />
+		<div class="copy">
+			<div class="name">WeekTodo 周计划</div>
+			<div class="tagline">离线周计划与任务清单</div>
+			<div class="meta">iOS · 完全离线 · 支持 WebDAV 同步</div>
+		</div>
+	</body>
+</html>
