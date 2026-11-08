@@ -142,6 +142,8 @@ tasks:
         # Record the actual Xcode/SDK used. App Store Connect checks these
         # keys when enforcing the latest public Xcode requirement.
         SDK_VERSION=$(xcrun --sdk {{.IOS_SDK}} --show-sdk-version)
+        SDK_BUILD=$(xcrun --sdk {{.IOS_SDK}} --show-sdk-build-version)
+        OS_BUILD=$(sw_vers -buildVersion)
         XCODE_VERSION=$(xcodebuild -version | awk 'NR==1{print $2}')
         XCODE_BUILD=$(xcodebuild -version | awk 'NR==2{print $3}')
         DTXCODE=$(python3 -c "v='$XCODE_VERSION'.split('.'); print(int(v[0])*100 + (int(v[1]) if len(v) > 1 else 0)*10)")
@@ -149,6 +151,9 @@ tasks:
         /usr/libexec/PlistBuddy -c "Set :DTPlatformName {{.IOS_SDK}}" "$INFO"
         /usr/libexec/PlistBuddy -c "Set :DTSDKName {{.IOS_SDK}}${SDK_VERSION}" "$INFO"
         /usr/libexec/PlistBuddy -c "Set :DTPlatformVersion ${SDK_VERSION}" "$INFO"
+        /usr/libexec/PlistBuddy -c "Set :DTSDKBuild ${SDK_BUILD}" "$INFO" 2>/dev/null || /usr/libexec/PlistBuddy -c "Add :DTSDKBuild string ${SDK_BUILD}" "$INFO"
+        /usr/libexec/PlistBuddy -c "Set :DTPlatformBuild ${SDK_BUILD}" "$INFO" 2>/dev/null || /usr/libexec/PlistBuddy -c "Add :DTPlatformBuild string ${SDK_BUILD}" "$INFO"
+        /usr/libexec/PlistBuddy -c "Set :BuildMachineOSBuild ${OS_BUILD}" "$INFO" 2>/dev/null || /usr/libexec/PlistBuddy -c "Add :BuildMachineOSBuild string ${OS_BUILD}" "$INFO"
         /usr/libexec/PlistBuddy -c "Set :DTXcode ${DTXCODE}" "$INFO"
         /usr/libexec/PlistBuddy -c "Set :DTXcodeBuild ${XCODE_BUILD}" "$INFO"
       - |

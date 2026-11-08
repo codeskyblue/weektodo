@@ -2,6 +2,8 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
+	<key>BuildMachineOSBuild</key>
+	<string>26B123</string>
 	<key>CFBundleDevelopmentRegion</key>
 	<string>en</string>
 	<key>CFBundleDisplayName</key>
@@ -30,10 +32,14 @@
 	<string>1</string>
 	<key>DTCompiler</key>
 	<string>com.apple.compilers.llvm.clang.1_0</string>
+	<key>DTPlatformBuild</key>
+	<string>24B8118</string>
 	<key>DTPlatformName</key>
 	<string>iphoneos</string>
 	<key>DTPlatformVersion</key>
 	<string>26.5</string>
+	<key>DTSDKBuild</key>
+	<string>24B8118</string>
 	<key>DTSDKName</key>
 	<string>iphoneos26.5</string>
 	<key>DTXcode</key>
@@ -59,6 +65,8 @@
 	<string>Copyright WeekTodo</string>
 	<key>NSLocalNetworkUsageDescription</key>
 	<string>WeekTodo 访问局域网，以连接你配置的 WebDAV 服务器同步数据。 WeekTodo accesses your local network to sync with the WebDAV server you configure.</string>
+	<key>NSLocationWhenInUseUsageDescription</key>
+	<string>WeekTodo 当前版本不请求定位权限；此说明用于满足系统对已链接定位框架的权限声明要求。</string>
 	<key>UIApplicationSupportsIndirectInputEvents</key>
 	<true/>
 	<key>UIDeviceFamily</key>

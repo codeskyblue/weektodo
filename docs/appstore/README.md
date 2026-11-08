@@ -6,9 +6,11 @@
 - Bundle ID：`com.uiautodev.weektodo`
 - App Store Connect App ID：`6831999039`
 - App Store 名称：`WeekTodo 周计划`（`WeekTodo` 已被占用）
-- TestFlight：`0.3.0 (1)` 已上传
+- TestFlight：`0.3.0 (4)` 已上传
+- App Store：`0.3.0 (4)` 已于 2026-11-08 提交审核，状态“正在等待审核”
+- 构建环境：Xcode 27.2 (27B52) / iOS 27.2 SDK
 - 已完成：元数据、6.5" iPhone 截图、13" iPad 截图、App 隐私（不收集数据）、年龄分级 4+、分类（效率）、免费定价、内容版权、审核联系方式
-- 当前阻塞：Apple 要求新 App 使用最新 Xcode 公共 GM 版本（当前需要 Xcode 27 / iOS 27 SDK）。本机是 Xcode 26.5 / iOS 26.5 SDK，需要先升级 macOS 27.2 并安装 Xcode 27，然后用 `IOS_BUILD=2` 重新构建上传。
+- 待补充：中国大陆 App 备案号（网站备案号不能替代 App 备案号）。备案号为 `浙ICP备2025220778号-XXA` 形式时，填入 App 信息 → 中国大陆 ICP 备案号。
 
 这份文档记录把 WeekTodo 发布到 App Store 的完整流程。代码和打包配置已经准备好，真正上传前需要你的 Apple Developer 账号完成签名和 App Store Connect 操作。
 
