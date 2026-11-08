@@ -6,8 +6,9 @@
 - Bundle ID：`com.uiautodev.weektodo`
 - App Store Connect App ID：`6831999039`
 - App Store 名称：`WeekTodo 周计划`（`WeekTodo` 已被占用）
-- TestFlight：`0.3.0 (4)` 已上传
-- App Store：`0.3.0 (4)` 已于 2026-11-08 提交审核，状态“正在等待审核”
+- TestFlight：`0.3.0 (6)` 已上传
+- App Store：`0.3.0 (6)` 已于 2026-11-08 提交审核，状态“正在等待审核”
+  - Build 4 已从审核中移除，替换为包含「添加子任务」「带入上周层级预览」「手机端字号」修复的 Build 6
 - 构建环境：Xcode 27.2 (27B52) / iOS 27.2 SDK
 - 已完成：元数据、6.5" iPhone 截图、13" iPad 截图、App 隐私（不收集数据）、年龄分级 4+、分类（效率）、免费定价、内容版权、审核联系方式
 - 待补充：中国大陆 App 备案号（网站备案号不能替代 App 备案号）。备案号为 `浙ICP备2025220778号-XXA` 形式时，填入 App 信息 → 中国大陆 ICP 备案号。
