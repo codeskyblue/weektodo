@@ -125,7 +125,7 @@
 					title={t('回到本周')}
 				>
 					{#if app.week}
-						<div class="truncate text-[15px] font-semibold sm:text-sm sm:font-medium">
+						<div class="truncate text-[17px] font-semibold sm:text-sm sm:font-medium">
 							{formatWeekTitle(app.week.id)}
 						</div>
 						<div class="truncate text-xs text-muted-foreground">

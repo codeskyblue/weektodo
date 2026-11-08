@@ -29,6 +29,10 @@
 
 	let inputEl = $state<HTMLInputElement | null>(null);
 	let rowEl = $state<HTMLElement | null>(null);
+	// Set when a menu action focuses a newly created task. The menu must not
+	// restore focus to its trigger on close, otherwise the new input blurs,
+	// the empty task is discarded and nothing appears to happen.
+	let keepFocusAfterMenu = false;
 
 	const task = $derived(row.task);
 	const done = $derived(task.status === 'done');
@@ -252,10 +256,21 @@
 							</Button>
 						{/snippet}
 					</DropdownMenu.Trigger>
-					<DropdownMenu.Content align="end" class="w-44">
+					<DropdownMenu.Content
+						align="end"
+						class="w-44"
+						onCloseAutoFocus={(event) => {
+							if (!keepFocusAfterMenu) return;
+							keepFocusAfterMenu = false;
+							event.preventDefault();
+						}}
+					>
 						<DropdownMenu.Item
 							disabled={dropped}
-							onSelect={() => app.addChild(task.id)}
+							onSelect={() => {
+								keepFocusAfterMenu = true;
+								app.addChild(task.id);
+							}}
 						>
 							<Plus class="size-4" /> {t('添加子任务')}
 						</DropdownMenu.Item>

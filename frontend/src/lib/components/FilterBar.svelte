@@ -60,7 +60,7 @@
 		<Button
 			variant="ghost"
 			size="xs"
-			class="shrink-0 max-sm:h-9 max-sm:px-2 max-sm:text-xs"
+			class="shrink-0 max-sm:h-9 max-sm:px-2 max-sm:text-sm"
 			disabled={app.carryBusy}
 			onclick={() => app.openCarryOver()}
 			title={t('把上一周未完成的任务带入本周')}
