@@ -9,7 +9,7 @@
 		<AlertDialog.Header>
 			<AlertDialog.Title>{app.confirm.title}</AlertDialog.Title>
 			{#if app.confirm.description}
-				<AlertDialog.Description class="max-h-60 overflow-y-auto whitespace-pre-line text-left">
+				<AlertDialog.Description class="max-h-60 overflow-y-auto whitespace-pre-wrap text-left">
 					{app.confirm.description}
 				</AlertDialog.Description>
 			{/if}

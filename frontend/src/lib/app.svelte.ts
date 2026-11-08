@@ -701,7 +701,7 @@ class AppState {
 			}
 			const previewText = preview.tasks
 				.slice(0, 6)
-				.map((task) => `${'  '.repeat(task.depth)}· ${task.text || t('（无标题任务）')}`)
+				.map((task) => `${'    '.repeat(task.depth)}· ${task.text || t('（无标题任务）')}`)
 				.join('\n');
 			const more = preview.tasks.length > 6 ? '\n' + t('… 还有 {count} 个', { count: preview.tasks.length - 6 }) : '';
 			this.askConfirm({
