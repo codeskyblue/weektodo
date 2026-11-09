@@ -93,14 +93,12 @@
 			else app.indent(task.id);
 			return;
 		}
-		if (
-			event.key === 'Backspace' &&
-			atStart &&
-			task.text.length === 0 &&
-			task.children.length === 0
-		) {
+		if (event.key === 'Backspace' && atStart && task.text.length === 0) {
 			event.preventDefault();
-			app.removeEmptyTask(task.id);
+			// A nested empty task steps out one level first, so Delete never
+			// removes a subtask outright. Only an empty top-level leaf is deleted.
+			if (row.parent) app.outdent(task.id);
+			else if (task.children.length === 0) app.removeEmptyTask(task.id);
 			return;
 		}
 		if (event.altKey && event.key === 'ArrowUp') {
