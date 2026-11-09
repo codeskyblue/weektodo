@@ -18,7 +18,7 @@ WeekTodo is a fully offline weekly task planner. No account or login is required
 
 ## Data
 
-All task data is stored locally in the app sandbox. The app contains no ads, analytics or tracking. Privacy details: https://github.com/codeskyblue/weektodo/blob/main/docs/privacy-policy.html
+All task data is stored locally in the app sandbox. The app contains no ads, analytics or tracking. Privacy details: https://github.com/codeskyblue/weektodo/blob/master/docs/privacy-policy.html
 
 ## Notes
 

@@ -211,8 +211,8 @@ xcrun altool --upload-app \
 
 如果没有启用 Pages，可暂时使用 GitHub 页面 URL：
 
-- `https://github.com/codeskyblue/weektodo/blob/main/docs/privacy-policy.html`
-- `https://github.com/codeskyblue/weektodo/blob/main/docs/support.html`
+- `https://github.com/codeskyblue/weektodo/blob/master/docs/privacy-policy.html`
+- `https://github.com/codeskyblue/weektodo/blob/master/docs/support.html`
 
 ## 8. 隐私标签
 
