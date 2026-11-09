@@ -9,6 +9,7 @@
 	import QuickAdd from '#lib/components/QuickAdd.svelte';
 	import ReportSheet from '#lib/components/ReportSheet.svelte';
 	import SettingsDialog from '#lib/components/SettingsDialog.svelte';
+	import BlankTaskArea from '#lib/components/BlankTaskArea.svelte';
 	import TaskList from '#lib/components/TaskList.svelte';
 	import WeekColumn from '#lib/components/WeekColumn.svelte';
 	import { Button } from '#lib/components/ui/button/index.js';
@@ -74,7 +75,7 @@
 			{#if app.weekSpan === 1}
 				<div
 					role="group"
-					class="flex-1 rounded-xl py-4 transition-colors {app.dropWeekId === app.anchorId
+					class="flex flex-1 flex-col rounded-xl pt-4 transition-colors {app.dropWeekId === app.anchorId
 						? 'bg-primary/5 ring-2 ring-primary/40 ring-inset'
 						: ''}"
 					ondragover={(event) => {
@@ -98,6 +99,7 @@
 					{:else}
 						<TaskList {rows} />
 					{/if}
+					<BlankTaskArea weekId={app.anchorId} {rows} />
 				</div>
 				<QuickAdd />
 			{:else}

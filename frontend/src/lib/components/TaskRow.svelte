@@ -178,6 +178,7 @@
 		: ''} {app.draggingTaskId === task.id ? 'opacity-50' : ''}"
 	style={`--row-indent: ${0.5 + row.depth * 1.15}rem`}
 	data-depth={row.depth}
+	data-task-id={task.id}
 	role="listitem"
 	ondragover={(event) => {
 		if (!app.draggingTaskId) return;

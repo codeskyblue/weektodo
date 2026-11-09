@@ -8,6 +8,7 @@
 	import { Button } from '#lib/components/ui/button/index.js';
 	import { Progress } from '#lib/components/ui/progress/index.js';
 	import QuickAdd from './QuickAdd.svelte';
+	import BlankTaskArea from './BlankTaskArea.svelte';
 	import TaskList from './TaskList.svelte';
 
 	let { week }: { week: Week } = $props();
@@ -38,7 +39,7 @@
 
 	<div
 		role="group"
-		class="min-h-32 flex-1 rounded-b-xl px-1.5 py-2 transition-colors sm:min-h-48 {app.dropWeekId ===
+		class="min-h-32 flex flex-1 flex-col rounded-b-xl px-1.5 pt-2 transition-colors sm:min-h-48 {app.dropWeekId ===
 		week.id
 			? 'bg-primary/5 ring-2 ring-primary/40 ring-inset'
 			: ''}"
@@ -72,6 +73,7 @@
 		{:else}
 			<TaskList {rows} />
 		{/if}
+		<BlankTaskArea weekId={week.id} {rows} />
 	</div>
 
 	<QuickAdd weekId={week.id} compact />

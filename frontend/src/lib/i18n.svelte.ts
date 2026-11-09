@@ -120,6 +120,7 @@ const en: Record<string, string> = {
 	'从一条小任务开始，或者把上周没做完的带过来。':
 		'Start with a small task, or bring over unfinished tasks from last week.',
 	'添加第一条': 'Add first task',
+	'新建任务': 'New task',
 	'带入上周未完成': 'Bring unfinished from last week',
 
 	// Quick add
