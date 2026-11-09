@@ -916,7 +916,7 @@
 					{#if app.meta?.commit && app.meta.commit !== 'unknown'}
 						· {app.meta.commit.slice(0, 7)}
 					{/if}
-					· {t('数据以 JSON 保存，每天首次保存时会自动备份，保留 14 天。')}
+					· {t('数据以 JSON 保存，每天首次保存时自动备份，保留最近 14 份每日备份。')}
 				</p>
 			</section>
 			{/if}

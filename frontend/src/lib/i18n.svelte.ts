@@ -53,8 +53,8 @@ const en: Record<string, string> = {
 	'重启超时，请手动重新打开 WeekTodo。': 'Restart timed out. Please reopen WeekTodo manually.',
 	'数据': 'Data',
 	'复制路径': 'Copy path',
-	'数据以 JSON 保存，每天首次保存时会自动备份，保留 14 天。':
-		'Data is saved as JSON, with a daily backup on first save, kept for 14 days.',
+	'数据以 JSON 保存，每天首次保存时自动备份，保留最近 14 份每日备份。':
+		'Data is saved as JSON. The first save of each day backs up the previous file; the latest 14 daily backups are kept.',
 	'语言': 'Language',
 	'切换语言': 'Switch language',
 	'显示周数': 'Weeks shown',
