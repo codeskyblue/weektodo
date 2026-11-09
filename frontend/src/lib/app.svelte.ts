@@ -98,6 +98,7 @@ class AppState {
 	carryBusy = $state(false);
 	settingsOpen = $state(false);
 	settingsSection = $state('ai');
+	pendingUpdateCheck = $state(false);
 	reportOpen = $state(false);
 	reportMode = $state<ReportMode>('brief');
 	reportMarkdown = $state('');
@@ -197,6 +198,10 @@ class AppState {
 			this.wailsBound = true;
 			onWails('weektodo:focus-quick-add', () => {
 				this.quickAddFocus++;
+			});
+			onWails('weektodo:check-updates', () => {
+				this.openSettings('update');
+				this.pendingUpdateCheck = true;
 			});
 			onWails('weektodo:window-hiding', () => {
 				void this.flushSave();

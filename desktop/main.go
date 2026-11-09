@@ -1,13 +1,11 @@
 package main
 
 import (
-	"context"
 	_ "embed"
 	"fmt"
 	"log"
 	"runtime"
 	"strconv"
-	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -83,7 +81,6 @@ func main() {
 	}
 
 	var quitting atomic.Bool
-	var updateInProgress atomic.Bool
 	var tray *application.SystemTray
 	var statusItem *application.MenuItem
 
@@ -113,62 +110,6 @@ func main() {
 		event.Cancel()
 	})
 
-	checkUpdates := func(lang i18n.Language) {
-		if updateInProgress.Load() {
-			return
-		}
-		text := trayText(lang)
-		info, err := updater.Check(context.Background(), version)
-		if err != nil {
-			app.Dialog.Error().SetTitle(text.checkFailed).SetMessage(err.Error()).Show()
-			return
-		}
-		if !info.Available {
-			message := text.upToDate
-			if info.Dev {
-				message = text.devBuild
-			}
-			app.Dialog.Info().SetTitle(text.checkUpdates).SetMessage(message).Show()
-			return
-		}
-		source := ""
-		if info.Source == "gh-proxy" {
-			source = text.viaProxy
-		}
-		notes := strings.TrimSpace(info.Notes)
-		if len([]rune(notes)) > 1800 {
-			notes = string([]rune(notes)[:1800]) + "…"
-		}
-		message := fmt.Sprintf(text.updateMessage, info.Latest, source)
-		if notes != "" {
-			message += "\n\n" + notes
-		}
-		dialog := app.Dialog.Question().
-			SetTitle(text.updateAvailable).
-			SetMessage(message)
-		dialog.AddButton(text.later).SetAsDefault()
-		dialog.AddButton(text.install).OnClick(func() {
-			if !updateInProgress.CompareAndSwap(false, true) {
-				return
-			}
-			go func() {
-				defer updateInProgress.Store(false)
-				app.Dialog.Info().
-					SetTitle(text.installing).
-					SetMessage(fmt.Sprintf(text.installingMessage, info.Latest)).
-					Show()
-				if _, err := updater.Apply(context.Background(), info); err != nil {
-					app.Dialog.Error().SetTitle(text.installFailed).SetMessage(err.Error()).Show()
-					return
-				}
-				if err := updater.Restart(); err != nil {
-					app.Dialog.Error().SetTitle(text.restartFailed).SetMessage(err.Error()).Show()
-				}
-			}()
-		})
-		dialog.Show()
-	}
-
 	activeCategory := func() string {
 		id := st.Settings().ActiveCategory
 		if id == "" {
@@ -189,7 +130,10 @@ func main() {
 			})
 		})
 		menu.Add(text.checkUpdates).OnClick(func(*application.Context) {
-			go checkUpdates(currentLanguage())
+			showWindow()
+			time.AfterFunc(180*time.Millisecond, func() {
+				app.Event.Emit("weektodo:check-updates")
+			})
 		})
 		statusItem = menu.Add(fmt.Sprintf(text.today, st.TodayCountInCategory(activeCategory(), time.Now())))
 		statusItem.SetEnabled(false)

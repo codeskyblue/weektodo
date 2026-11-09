@@ -274,6 +274,13 @@
 		}
 	}
 
+	$effect(() => {
+		if (!app.pendingUpdateCheck) return;
+		app.pendingUpdateCheck = false;
+		section = 'update';
+		void checkForUpdate();
+	});
+
 	async function installUpdate(): Promise<void> {
 		if (!updateInfo?.available || installingUpdate) return;
 		installingUpdate = true;
