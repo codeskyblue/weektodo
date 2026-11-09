@@ -33,6 +33,11 @@
 	// restore focus to its trigger on close, otherwise the new input blurs,
 	// the empty task is discarded and nothing appears to happen.
 	let keepFocusAfterMenu = false;
+	// IME (e.g. Chinese/Japanese) composition state. Enter confirms a candidate,
+	// so it must not trigger task actions. Safari ends composition before the
+	// confirming keydown, so remember that moment too.
+	let composing = false;
+	let ignoreTypingAfterComposition = false;
 
 	const task = $derived(row.task);
 	const done = $derived(task.status === 'done');
@@ -48,7 +53,25 @@
 		inputEl.setSelectionRange(position, position);
 	});
 
+	function handleCompositionStart(): void {
+		composing = true;
+	}
+
+	function handleCompositionEnd(): void {
+		composing = false;
+		ignoreTypingAfterComposition = true;
+		setTimeout(() => {
+			ignoreTypingAfterComposition = false;
+		}, 0);
+	}
+
 	function handleKeydown(event: KeyboardEvent): void {
+		// The IME owns these keys while it is composing text: Enter picks a
+		// candidate, Escape dismisses it, and arrows move through candidates.
+		if (composing || ignoreTypingAfterComposition) return;
+		// Fallback for browsers that do not set isComposing on the key that
+		// confirms a composition (notably older WebKit).
+		if (event.isComposing || event.keyCode === 229) return;
 		const input = event.currentTarget as HTMLInputElement;
 		const atStart = input.selectionStart === 0 && input.selectionEnd === 0;
 		if (event.key === 'Enter') {
@@ -213,6 +236,8 @@
 				value={task.text}
 				oninput={(event) => app.updateText(task.id, event.currentTarget.value)}
 				onkeydown={handleKeydown}
+				oncompositionstart={handleCompositionStart}
+				oncompositionend={handleCompositionEnd}
 				onblur={handleBlur}
 				maxlength="500"
 				autocomplete="off"
