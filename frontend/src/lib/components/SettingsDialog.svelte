@@ -320,6 +320,7 @@
 			clearApiKey = false;
 			davPassword = '';
 			clearDavPassword = false;
+			app.settingsOpen = false;
 		}
 	}
 
@@ -934,7 +935,7 @@
 			>
 			<Button size="sm" class="max-sm:h-11 max-sm:flex-[2]" onclick={save} disabled={saving}>
 				{#if saving}<Loader2 class="animate-spin" /> {t('保存中…')}
-				{:else}{t('保存设置')}{/if}
+				{:else}{t('保存并关闭')}{/if}
 			</Button>
 		</Dialog.Footer>
 	</Dialog.Content>

@@ -11,6 +11,7 @@ const en: Record<string, string> = {
 	'确定': 'OK',
 	'关闭': 'Close',
 	'保存设置': 'Save settings',
+	'保存并关闭': 'Save and close',
 	'保存中…': 'Saving…',
 	'测试中…': 'Testing…',
 	'测试连接': 'Test connection',
