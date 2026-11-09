@@ -17,10 +17,22 @@
 
 	const rows = $derived(app.rows);
 
+	function handleGlobalKeydown(event: KeyboardEvent): void {
+		// Cmd+, on macOS and Ctrl+, elsewhere opens settings, matching the
+		// platform convention. Let the IME keep its own key handling.
+		if (event.isComposing) return;
+		if (!(event.metaKey || event.ctrlKey) || event.altKey || event.shiftKey) return;
+		if (event.key !== ',') return;
+		event.preventDefault();
+		if (!app.loading && !app.settingsOpen) app.openSettings();
+	}
+
 	onMount(() => {
 		void app.init();
 	});
 </script>
+
+<svelte:window onkeydown={handleGlobalKeydown} />
 
 <div class="flex min-h-svh flex-col bg-background">
 	<AppHeader />
