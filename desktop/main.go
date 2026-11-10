@@ -89,6 +89,7 @@ func main() {
 		window.Show()
 		window.Restore()
 		window.Focus()
+		activateApp()
 	}
 	hideWindow := func() {
 		app.Event.Emit("weektodo:window-hiding")
@@ -198,6 +199,13 @@ func main() {
 	})
 
 	if runtime.GOOS == "darwin" {
+		app.Event.OnApplicationEvent(events.Mac.ApplicationDidBecomeActive, func(*application.ApplicationEvent) {
+			// Cmd+Tab can activate the app while its window is hidden after a
+			// failed restore; make sure the window is actually on screen.
+			if !window.IsVisible() || window.IsMinimised() {
+				showWindow()
+			}
+		})
 		app.Event.OnApplicationEvent(events.Mac.ApplicationShouldHandleReopen, func(*application.ApplicationEvent) {
 			showWindow()
 		})
