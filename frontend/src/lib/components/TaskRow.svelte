@@ -12,6 +12,7 @@
 	import Trash2 from '@lucide/svelte/icons/trash-2';
 	import { app } from '#lib/app.svelte';
 	import { t } from '#lib/i18n.svelte';
+	import { formatTimestamp } from '#lib/date';
 	import { isIndeterminate } from '#lib/tree';
 	import type { TaskRow } from '#lib/types';
 	import { Checkbox } from '#lib/components/ui/checkbox/index.js';
@@ -289,6 +290,19 @@
 							event.preventDefault();
 						}}
 					>
+						{#if task.createdAt}
+							<DropdownMenu.Label>
+								{t('添加于 {date}', { date: formatTimestamp(task.createdAt) })}
+							</DropdownMenu.Label>
+						{/if}
+						{#if task.completedAt}
+							<DropdownMenu.Label>
+								{t('完成于 {date}', { date: formatTimestamp(task.completedAt) })}
+							</DropdownMenu.Label>
+						{/if}
+						{#if task.createdAt || task.completedAt}
+							<DropdownMenu.Separator />
+						{/if}
 						<DropdownMenu.Item
 							disabled={dropped}
 							onSelect={() => {

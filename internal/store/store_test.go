@@ -65,6 +65,9 @@ func TestSaveLoadAndBackup(t *testing.T) {
 	if got := reloaded.TodayCount(time.Date(2026, 11, 5, 12, 0, 0, 0, time.Local)); got != 1 {
 		t.Fatalf("today count = %d", got)
 	}
+	if got := reloaded.WeekCountInCategory(model.DefaultCategoryID, time.Date(2026, 11, 5, 12, 0, 0, 0, time.Local)); got != 1 {
+		t.Fatalf("week count = %d", got)
+	}
 }
 
 func TestSettingsRoundTrip(t *testing.T) {

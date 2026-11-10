@@ -83,6 +83,16 @@ export function monthDay(value: string): string {
 	return new Intl.DateTimeFormat(locale(), { month: 'short', day: 'numeric' }).format(parseISO(value));
 }
 
+export function formatTimestamp(value: string): string {
+	const date = new Date(value);
+	if (Number.isNaN(date.getTime())) return value.slice(0, 10);
+	return new Intl.DateTimeFormat(locale(), {
+		year: 'numeric',
+		month: 'short',
+		day: 'numeric'
+	}).format(date);
+}
+
 export function formatRange(start: string, end: string): string {
 	return `${monthDay(start)} – ${monthDay(end)}`;
 }

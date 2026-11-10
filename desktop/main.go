@@ -135,7 +135,7 @@ func main() {
 				app.Event.Emit("weektodo:check-updates")
 			})
 		})
-		statusItem = menu.Add(fmt.Sprintf(text.today, st.TodayCountInCategory(activeCategory(), time.Now())))
+		statusItem = menu.Add(fmt.Sprintf(text.weekRemaining, st.WeekCountInCategory(activeCategory(), time.Now())))
 		statusItem.SetEnabled(false)
 		menu.AddSeparator()
 		menu.Add(text.hide).OnClick(func(*application.Context) { hideWindow() })
@@ -156,15 +156,15 @@ func main() {
 		syncLanguage()
 		lang := currentLanguage()
 		text := trayText(lang)
-		count := st.TodayCountInCategory(activeCategory(), time.Now())
+		count := st.WeekCountInCategory(activeCategory(), time.Now())
 		application.InvokeSync(func() {
 			if count > 0 {
 				tray.SetLabel(strconv.Itoa(count))
 			} else {
 				tray.SetLabel("")
 			}
-			tray.SetTooltip(fmt.Sprintf("WeekTodo · %s", fmt.Sprintf(text.today, count)))
-			statusItem.SetLabel(fmt.Sprintf(text.today, count))
+			tray.SetTooltip(fmt.Sprintf("WeekTodo · %s", fmt.Sprintf(text.weekRemaining, count)))
+			statusItem.SetLabel(fmt.Sprintf(text.weekRemaining, count))
 		})
 	}
 

@@ -695,6 +695,18 @@ func (s *Store) TodayCountInCategory(category string, now time.Time) int {
 	return todo.TodayCount(week, todo.DateString(now))
 }
 
+// WeekCountInCategory returns unfinished leaf tasks for the current week in one category.
+func (s *Store) WeekCountInCategory(category string, now time.Time) int {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	week, ok := s.weekLocked(category, todo.WeekIDFor(now))
+	if !ok {
+		return 0
+	}
+	stats := todo.WeekStats(week)
+	return stats.Total - stats.Done
+}
+
 // Settings returns the persisted settings, including the API key.
 func (s *Store) Settings() model.Settings {
 	s.mu.RLock()

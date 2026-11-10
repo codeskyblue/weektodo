@@ -105,6 +105,8 @@ const en: Record<string, string> = {
 	'从上一周带入': 'Carried from last week',
 	'写点什么…': 'Write something…',
 	'任务操作': 'Task actions',
+	'添加于 {date}': 'Added {date}',
+	'完成于 {date}': 'Completed {date}',
 	'添加子任务': 'Add subtask',
 	'上移': 'Move up',
 	'下移': 'Move down',
