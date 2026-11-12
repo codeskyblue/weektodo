@@ -2,6 +2,17 @@ import { app } from './app.svelte';
 import type { TaskRow } from './types';
 
 /**
+ * Splits pasted text into one task per non-empty line. All common newline
+ * styles are supported, and surrounding whitespace is removed.
+ */
+export function parseTaskLines(text: string): string[] {
+	return text
+		.split(/\r\n|\r|\n/)
+		.map((line) => line.trim())
+		.filter((line) => line.length > 0);
+}
+
+/**
  * Creates a task when the empty space below the task list is clicked.
  * A click within one row below the last task continues that task's level;
  * clicking farther down starts a new top-level task.

@@ -102,6 +102,13 @@
 			else if (task.children.length === 0) app.removeEmptyTask(task.id);
 			return;
 		}
+		if ((event.metaKey || event.ctrlKey) && event.key === 'Backspace') {
+			event.preventDefault();
+			// Deleting a task with children also removes the subtree, so keep
+			// the same confirmation the task menu uses.
+			app.deleteTask(task.id);
+			return;
+		}
 		if (event.altKey && event.key === 'ArrowUp') {
 			event.preventDefault();
 			app.move(task.id, -1);

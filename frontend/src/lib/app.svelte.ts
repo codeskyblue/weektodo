@@ -479,6 +479,34 @@ class AppState {
 		return task;
 	}
 
+	addTasks(
+		texts: string[],
+		options: { weekId?: string; day?: string | null } = {}
+	): Task[] {
+		const week = this.weekById(options.weekId ?? this.anchorId);
+		if (!week) return [];
+		const day =
+			options.day !== undefined
+				? options.day
+				: this.isCurrent(week)
+					? this.today
+					: null;
+		const tasks: Task[] = [];
+		for (const text of texts) {
+			const trimmed = text.trim();
+			if (!trimmed) continue;
+			const task = newTask(trimmed, day);
+			week.tasks.push(task);
+			tasks.push(task);
+		}
+		if (tasks.length === 0) return [];
+		recomputeParents(week.tasks);
+		if (this.filter === 'done' || this.filter === 'dropped') this.filter = 'all';
+		if (this.filter === 'today' && day !== this.today) this.filter = 'all';
+		this.markDirty(week.id);
+		return tasks;
+	}
+
 	addSibling(taskId: string): void {
 		const week = this.weekOfTask(taskId);
 		if (!week) return;

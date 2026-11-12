@@ -19,13 +19,21 @@
 	const rows = $derived(app.rows);
 
 	function handleGlobalKeydown(event: KeyboardEvent): void {
-		// Cmd+, on macOS and Ctrl+, elsewhere opens settings, matching the
-		// platform convention. Let the IME keep its own key handling.
+		// Cmd+, / Ctrl+, opens settings, matching the platform convention.
+		// Cmd+N / Ctrl+N jumps to the quick-add input. Let the IME keep its
+		// own key handling.
 		if (event.isComposing) return;
 		if (!(event.metaKey || event.ctrlKey) || event.altKey || event.shiftKey) return;
-		if (event.key !== ',') return;
-		event.preventDefault();
-		if (!app.loading && !app.settingsOpen) app.openSettings();
+		if (app.loading || app.settingsOpen || app.reportOpen || app.confirm.open) return;
+		if (event.key === ',') {
+			event.preventDefault();
+			app.openSettings();
+			return;
+		}
+		if (event.code === 'KeyN') {
+			event.preventDefault();
+			app.focusQuickAdd();
+		}
 	}
 
 	onMount(() => {
