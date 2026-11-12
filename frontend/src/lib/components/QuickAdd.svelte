@@ -5,6 +5,7 @@
 	import { app } from '#lib/app.svelte';
 	import { t } from '#lib/i18n.svelte';
 	import { daysOfWeek, weekdayLabel } from '#lib/date';
+	import { parseTaskLines } from '#lib/task-add';
 	import { Button } from '#lib/components/ui/button/index.js';
 	import { Input } from '#lib/components/ui/input/index.js';
 	import * as Popover from '#lib/components/ui/popover/index.js';
@@ -15,6 +16,9 @@
 	let inputEl = $state<HTMLInputElement | null>(null);
 	let dayOpen = $state(false);
 	let dayOverride = $state<{ weekId: string; day: string | null } | null>(null);
+	// Tracks the last quick-add focus request this instance handled, so
+	// navigating between weeks does not refocus an old request.
+	let lastFocusRequest = 0;
 
 	const week = $derived(app.weekById(weekId || app.anchorId) ?? app.week);
 	const isCurrent = $derived(week ? app.isCurrent(week) : false);
@@ -32,9 +36,14 @@
 	}
 
 	$effect(() => {
-		if (app.quickAddFocus > 0 && !compact) {
-			inputEl?.focus();
-		}
+		const request = app.quickAddFocus;
+		if (request === lastFocusRequest) return;
+		lastFocusRequest = request;
+		if (request === 0) return;
+		// In the multi-week layout only the current week's compact quick-add
+		// should take focus.
+		if (compact && week?.id !== app.anchorId) return;
+		inputEl?.focus();
 	});
 
 	function submit(): void {
@@ -44,6 +53,20 @@
 			return;
 		}
 		app.addTask({ text, day: selectedDay, weekId: week?.id });
+		draft = '';
+		inputEl?.focus();
+	}
+
+	function handlePaste(event: ClipboardEvent): void {
+		const text = event.clipboardData?.getData('text/plain') ?? '';
+		if (!text.includes('\n') && !text.includes('\r')) return;
+		const lines = parseTaskLines(text);
+		if (lines.length === 0 || !week) return;
+		event.preventDefault();
+		// Keep whatever was already typed as the first imported task.
+		const pending = draft.trim();
+		if (pending) lines.unshift(pending);
+		app.addTasks(lines, { weekId: week.id, day: selectedDay });
 		draft = '';
 		inputEl?.focus();
 	}
@@ -67,6 +90,8 @@
 			placeholder={compact ? t('添加任务…') : t('添加任务，按 Enter 保存…')}
 			maxlength={500}
 			autocomplete="off"
+			data-quick-add
+			onpaste={handlePaste}
 			class={compact ? 'h-10 text-base sm:h-8 sm:text-xs' : 'h-11 flex-1 bg-background sm:h-9'}
 		/>
 		<Popover.Root bind:open={dayOpen}>
@@ -125,12 +150,16 @@
 	</form>
 	{#if !compact}
 		<div
-			class="mx-auto mt-1.5 hidden w-full max-w-6xl items-center gap-3 text-[11px] text-muted-foreground sm:flex"
+			class="mx-auto mt-1.5 hidden w-full max-w-6xl flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-muted-foreground sm:flex"
 		>
 			<span class="flex items-center gap-1"><CornerDownLeft class="size-3" /> {t('Enter 新建同级')}</span>
 			<span>{t('行首 Tab 缩进')}</span>
 			<span>{t('Shift+Tab 提升')}</span>
 			<span>{t('Alt+↑↓ 排序')}</span>
+			<span>{t('Cmd/Ctrl+N 新建')}</span>
+			<span>{t('Cmd/Ctrl+Z 撤销')}</span>
+			<span>{t('Cmd/Ctrl+Backspace 删除')}</span>
+			<span>{t('粘贴多行导入')}</span>
 		</div>
 	{/if}
 </div>

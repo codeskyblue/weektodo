@@ -133,6 +133,10 @@ const en: Record<string, string> = {
 	'行首 Tab 缩进': 'Tab at start: indent',
 	'Shift+Tab 提升': 'Shift+Tab: outdent',
 	'Alt+↑↓ 排序': 'Alt+↑↓: reorder',
+	'Cmd/Ctrl+N 新建': 'Cmd/Ctrl+N: new task',
+	'Cmd/Ctrl+Z 撤销': 'Cmd/Ctrl+Z: undo',
+	'Cmd/Ctrl+Backspace 删除': 'Cmd/Ctrl+Backspace: delete',
+	'粘贴多行导入': 'Paste multiple lines to import',
 
 	// Report
 	'周报已复制': 'Report copied',
