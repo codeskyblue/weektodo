@@ -52,6 +52,12 @@ export interface ConfirmState extends ConfirmOptions {
 	open: boolean;
 }
 
+interface UndoEntry {
+	category: string;
+	weeks: Week[];
+	focusTaskId?: string;
+}
+
 const emptyStats = (): Stats => ({ total: 0, done: 0, dropped: 0, unplanned: 0 });
 
 function normalizeWeekSpan(value: number | undefined): 1 | 2 | 3 {
@@ -61,6 +67,10 @@ function normalizeWeekSpan(value: number | undefined): 1 | 2 | 3 {
 function placeholderWeek(id: string): Week {
 	const start = weekStart(id);
 	return { id, start, end: addDays(start, 6), tasks: [] };
+}
+
+function cloneWeek(week: Week): Week {
+	return JSON.parse(JSON.stringify(week)) as Week;
 }
 
 function messageOf(error: unknown): string {
@@ -116,6 +126,8 @@ class AppState {
 	quickAddFocus = $state(0);
 	focusRequest = $state<{ id: string; caret: 'start' | 'end'; nonce: number } | null>(null);
 
+	private undoStack: UndoEntry[] = [];
+	private textUndoTarget: { taskId: string; at: number } | null = null;
 	private dirtyWeeks = new Set<string>();
 	private saving = false;
 	private revision = 0;
@@ -137,6 +149,10 @@ class AppState {
 
 	get activeCategories(): Category[] {
 		return this.categories.filter((category) => !category.archived);
+	}
+
+	get canUndo(): boolean {
+		return this.undoStack.length > 0;
 	}
 
 	get week(): Week | null {
@@ -277,6 +293,8 @@ class AppState {
 			);
 			if (token !== this.loadSeq) return;
 			this.weeks = weeks;
+			this.undoStack = [];
+			this.textUndoTarget = null;
 		} catch {
 			// A background refresh should never disturb the current view.
 		}
@@ -311,6 +329,8 @@ class AppState {
 			this.reportError = '';
 			this.saveStatus = 'saved';
 			this.dirtyWeeks.clear();
+			this.undoStack = [];
+			this.textUndoTarget = null;
 			this.revision++;
 			const url = new URL(window.location.href);
 			url.searchParams.set('category', categoryId);
@@ -390,6 +410,53 @@ class AppState {
 		}, 350);
 	}
 
+	private pushUndo(weeks: Week[], options: { focusTaskId?: string } = {}): UndoEntry | null {
+		if (!this.activeCategoryId || weeks.length === 0) return null;
+		this.textUndoTarget = null;
+		const seen = new Set<string>();
+		const snapshot: Week[] = [];
+		for (const week of weeks) {
+			if (seen.has(week.id)) continue;
+			seen.add(week.id);
+			snapshot.push(cloneWeek(week));
+		}
+		if (snapshot.length === 0) return null;
+		const entry: UndoEntry = {
+			category: this.activeCategoryId,
+			weeks: snapshot,
+			focusTaskId: options.focusTaskId
+		};
+		this.undoStack.push(entry);
+		if (this.undoStack.length > 50) this.undoStack.shift();
+		return entry;
+	}
+
+	private discardUndo(entry: UndoEntry | null): void {
+		if (!entry) return;
+		const index = this.undoStack.lastIndexOf(entry);
+		if (index >= 0) this.undoStack.splice(index, 1);
+	}
+
+	undo(): void {
+		const entry = this.undoStack.pop();
+		if (!entry) return;
+		this.textUndoTarget = null;
+		if (entry.category !== this.activeCategoryId) {
+			this.undoStack = [];
+			return;
+		}
+		for (const snapshot of entry.weeks) {
+			const restored = cloneWeek(snapshot);
+			recomputeParents(restored.tasks);
+			const index = this.weeks.findIndex((week) => week.id === restored.id);
+			if (index >= 0) this.weeks[index] = restored;
+			else this.weeks.push(restored);
+			this.markDirty(restored.id);
+		}
+		this.weeks = [...this.weeks].sort((a, b) => a.start.localeCompare(b.start));
+		if (entry.focusTaskId) this.requestFocus(entry.focusTaskId, 'end');
+	}
+
 	async flushSave(): Promise<void> {
 		if (this.saveTimer) {
 			clearTimeout(this.saveTimer);
@@ -463,14 +530,12 @@ class AppState {
 				: this.isCurrent(week)
 					? this.today
 					: null;
+		const parent = options.parentId ? findTask(week.tasks, options.parentId) : null;
+		if (options.parentId && (!parent || parent.status === 'dropped')) return null;
+		this.pushUndo([week]);
 		const task = newTask(options.text ?? '', day);
-		if (options.parentId) {
-			const parent = findTask(week.tasks, options.parentId);
-			if (!parent || parent.status === 'dropped') return null;
-			appendChild(parent, task);
-		} else {
-			week.tasks.push(task);
-		}
+		if (parent) appendChild(parent, task);
+		else week.tasks.push(task);
 		recomputeParents(week.tasks);
 		if (this.filter === 'done' || this.filter === 'dropped') this.filter = 'all';
 		if (this.filter === 'today' && day !== this.today) this.filter = 'all';
@@ -491,15 +556,15 @@ class AppState {
 				: this.isCurrent(week)
 					? this.today
 					: null;
+		const lines = texts.map((text) => text.trim()).filter((text) => text.length > 0);
+		if (lines.length === 0) return [];
+		this.pushUndo([week]);
 		const tasks: Task[] = [];
-		for (const text of texts) {
-			const trimmed = text.trim();
-			if (!trimmed) continue;
-			const task = newTask(trimmed, day);
+		for (const text of lines) {
+			const task = newTask(text, day);
 			week.tasks.push(task);
 			tasks.push(task);
 		}
-		if (tasks.length === 0) return [];
 		recomputeParents(week.tasks);
 		if (this.filter === 'done' || this.filter === 'dropped') this.filter = 'all';
 		if (this.filter === 'today' && day !== this.today) this.filter = 'all';
@@ -512,6 +577,7 @@ class AppState {
 		if (!week) return;
 		const found = locate(week.tasks, taskId);
 		if (!found) return;
+		this.pushUndo([week]);
 		const task = newTask('', found.task.day ?? (this.isCurrent(week) ? this.today : null));
 		siblingInsert(week.tasks, taskId, task);
 		recomputeParents(week.tasks);
@@ -524,6 +590,7 @@ class AppState {
 		if (!week) return;
 		const found = locate(week.tasks, taskId);
 		if (!found || found.task.status === 'dropped') return;
+		this.pushUndo([week]);
 		const task = newTask('', found.task.day ?? (this.isCurrent(week) ? this.today : null));
 		appendChild(found.task, task);
 		recomputeParents(week.tasks);
@@ -535,7 +602,15 @@ class AppState {
 		const week = this.weekOfTask(taskId);
 		if (!week) return;
 		const task = findTask(week.tasks, taskId);
-		if (!task) return;
+		if (!task || task.text === text) return;
+		const now = Date.now();
+		const burst = this.textUndoTarget;
+		if (!burst || burst.taskId !== taskId || now - burst.at > 800) {
+			this.pushUndo([week], { focusTaskId: taskId });
+			this.textUndoTarget = { taskId, at: now };
+		} else {
+			burst.at = now;
+		}
 		task.text = text;
 		task.updatedAt = nowISO();
 		this.markDirty(week.id);
@@ -547,6 +622,8 @@ class AppState {
 		const task = findTask(week.tasks, taskId);
 		if (!task) return;
 		if (day && (day < week.start || day > week.end)) return;
+		if ((day ?? null) === (task.day ?? null)) return;
+		this.pushUndo([week]);
 		if (day) task.day = day;
 		else delete task.day;
 		task.updatedAt = nowISO();
@@ -567,6 +644,7 @@ class AppState {
 				description: t('「{title}」还有 {count} 个未完成的子任务。完成后会把这些子任务一起勾选。', { title: taskLabel(task), count: pending }),
 				confirmLabel: t('全部完成'),
 				onConfirm: () => {
+					this.pushUndo([week]);
 					completeSubtree(task);
 					recomputeParents(week.tasks);
 					this.markDirty(week.id);
@@ -574,6 +652,7 @@ class AppState {
 			});
 			return;
 		}
+		this.pushUndo([week]);
 		if (task.status === 'done') uncompleteSubtree(task);
 		else completeSubtree(task);
 		recomputeParents(week.tasks);
@@ -588,6 +667,7 @@ class AppState {
 		const task = found.task;
 		const total = countNodes(task);
 		const apply = (): void => {
+			this.pushUndo([week]);
 			dropSubtree(task);
 			recomputeParents(week.tasks);
 			this.markDirty(week.id);
@@ -616,6 +696,7 @@ class AppState {
 		if (!week) return;
 		const found = locate(week.tasks, taskId);
 		if (!found) return;
+		this.pushUndo([week]);
 		restoreSubtree(found.task);
 		recomputeParents(week.tasks);
 		this.markDirty(week.id);
@@ -640,6 +721,7 @@ class AppState {
 			confirmLabel: t('删除'),
 			destructive: true,
 			onConfirm: () => {
+				this.pushUndo([week]);
 				removeTask(week.tasks, taskId);
 				recomputeParents(week.tasks);
 				if (fallbackFocus) this.requestFocus(fallbackFocus, 'end');
@@ -668,7 +750,11 @@ class AppState {
 		if (!week) return;
 		const task = findTask(week.tasks, taskId);
 		if (!task) return;
-		if (!indentTask(week.tasks, taskId)) return;
+		const undo = this.pushUndo([week]);
+		if (!indentTask(week.tasks, taskId)) {
+			this.discardUndo(undo);
+			return;
+		}
 		task.updatedAt = nowISO();
 		recomputeParents(week.tasks);
 		this.requestFocus(taskId, 'start');
@@ -678,7 +764,11 @@ class AppState {
 	outdent(taskId: string): void {
 		const week = this.weekOfTask(taskId);
 		if (!week) return;
-		if (!outdentTask(week.tasks, taskId)) return;
+		const undo = this.pushUndo([week]);
+		if (!outdentTask(week.tasks, taskId)) {
+			this.discardUndo(undo);
+			return;
+		}
 		const task = findTask(week.tasks, taskId);
 		if (task) task.updatedAt = nowISO();
 		recomputeParents(week.tasks);
@@ -689,7 +779,11 @@ class AppState {
 	move(taskId: string, delta: number): void {
 		const week = this.weekOfTask(taskId);
 		if (!week) return;
-		if (!moveSibling(week.tasks, taskId, delta)) return;
+		const undo = this.pushUndo([week]);
+		if (!moveSibling(week.tasks, taskId, delta)) {
+			this.discardUndo(undo);
+			return;
+		}
 		const task = findTask(week.tasks, taskId);
 		if (task) task.updatedAt = nowISO();
 		this.requestFocus(taskId, 'start');
@@ -743,7 +837,9 @@ class AppState {
 				confirmLabel: t('带入'),
 				onConfirm: async () => {
 					const weekId = this.week?.id;
-					if (!weekId) return;
+					const target = this.week;
+					if (!weekId || !target) return;
+					const undo = this.pushUndo([target]);
 					this.carryBusy = true;
 					try {
 						const result = await api.carryOver(this.activeCategoryId, weekId);
@@ -758,10 +854,12 @@ class AppState {
 								description: result.skipped > 0 ? t('跳过 {count} 个已带入的任务', { count: result.skipped }) : undefined
 							});
 						} else {
+							this.discardUndo(undo);
 							toast.info(t('没有新的任务可带入'));
 						}
 						emitWails('weektodo:changed');
 					} catch (error) {
+						this.discardUndo(undo);
 						toast.error(t('带入失败'), { description: messageOf(error) });
 					} finally {
 						this.carryBusy = false;
@@ -881,6 +979,8 @@ class AppState {
 		try {
 			const result = await api.syncWebDAV(draft);
 			this.autoSyncErrorShown = false;
+			this.undoStack = [];
+			this.textUndoTarget = null;
 			toast.success(
 				t('同步完成：{weeks} 周 / {tasks} 个任务', {
 					weeks: result.weeks,
@@ -1032,6 +1132,8 @@ class AppState {
 		const from = this.weekOfTask(taskId);
 		if (!from) return;
 		if (from.id === toWeekId && !parentTaskId) return;
+		const target = this.weekById(toWeekId);
+		const undo = this.pushUndo(target && target.id !== from.id ? [from, target] : [from]);
 		this.moveBusy = true;
 		await this.flushSave();
 		await this.waitForSave();
@@ -1051,6 +1153,7 @@ class AppState {
 			toast.success(t('已移到 {week}', { week: formatWeekTitle(result.to.id) }));
 			emitWails('weektodo:changed');
 		} catch (error) {
+			this.discardUndo(undo);
 			toast.error(t('移动失败'), { description: messageOf(error) });
 		} finally {
 			this.moveBusy = false;
@@ -1114,9 +1217,11 @@ class AppState {
 			await this.moveTaskToWeek(dragId, targetWeek.id, targetTaskId);
 			return;
 		}
-		const task = removeTask(sourceWeek.tasks, dragId);
+		const task = findTask(sourceWeek.tasks, dragId);
 		const parent = findTask(sourceWeek.tasks, targetTaskId);
 		if (!task || !parent) return;
+		this.pushUndo([sourceWeek]);
+		removeTask(sourceWeek.tasks, dragId);
 		parent.children.push(task);
 		task.updatedAt = nowISO();
 		recomputeParents(sourceWeek.tasks);
@@ -1136,8 +1241,12 @@ class AppState {
 		const found = locate(sourceWeek.tasks, dragId);
 		if (!found) return;
 		if (!found.parent && found.index === found.siblings.length - 1) return;
+		const undo = this.pushUndo([sourceWeek]);
 		const task = removeTask(sourceWeek.tasks, dragId);
-		if (!task) return;
+		if (!task) {
+			this.discardUndo(undo);
+			return;
+		}
 		sourceWeek.tasks.push(task);
 		task.updatedAt = nowISO();
 		recomputeParents(sourceWeek.tasks);

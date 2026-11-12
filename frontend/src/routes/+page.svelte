@@ -18,16 +18,35 @@
 
 	const rows = $derived(app.rows);
 
+	function shouldUseNativeUndo(): boolean {
+		const el = document.activeElement;
+		// The quick-add draft is not part of the undo history, so let the
+		// browser undo it while it has text.
+		return (
+			(el instanceof HTMLInputElement || el instanceof HTMLTextAreaElement) &&
+			el.hasAttribute('data-quick-add') &&
+			el.value.length > 0
+		);
+	}
+
 	function handleGlobalKeydown(event: KeyboardEvent): void {
 		// Cmd+, / Ctrl+, opens settings, matching the platform convention.
-		// Cmd+N / Ctrl+N jumps to the quick-add input. Let the IME keep its
-		// own key handling.
+		// Cmd+N / Ctrl+N jumps to the quick-add input, and Cmd+Z / Ctrl+Z
+		// undoes the latest task operation. Let the IME keep its own key
+		// handling.
 		if (event.isComposing) return;
 		if (!(event.metaKey || event.ctrlKey) || event.altKey || event.shiftKey) return;
-		if (app.loading || app.settingsOpen || app.reportOpen || app.confirm.open) return;
+		if (app.loading || app.navigating || app.settingsOpen || app.reportOpen || app.confirm.open) return;
 		if (event.key === ',') {
 			event.preventDefault();
 			app.openSettings();
+			return;
+		}
+		if (event.code === 'KeyZ') {
+			if (shouldUseNativeUndo()) return;
+			if (!app.canUndo) return;
+			event.preventDefault();
+			app.undo();
 			return;
 		}
 		if (event.code === 'KeyN') {

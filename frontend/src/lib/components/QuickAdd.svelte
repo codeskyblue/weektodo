@@ -90,6 +90,7 @@
 			placeholder={compact ? t('添加任务…') : t('添加任务，按 Enter 保存…')}
 			maxlength={500}
 			autocomplete="off"
+			data-quick-add
 			onpaste={handlePaste}
 			class={compact ? 'h-10 text-base sm:h-8 sm:text-xs' : 'h-11 flex-1 bg-background sm:h-9'}
 		/>
@@ -156,6 +157,7 @@
 			<span>{t('Shift+Tab 提升')}</span>
 			<span>{t('Alt+↑↓ 排序')}</span>
 			<span>{t('Cmd/Ctrl+N 新建')}</span>
+			<span>{t('Cmd/Ctrl+Z 撤销')}</span>
 			<span>{t('Cmd/Ctrl+Backspace 删除')}</span>
 			<span>{t('粘贴多行导入')}</span>
 		</div>
