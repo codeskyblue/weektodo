@@ -81,6 +81,7 @@ const en: Record<string, string> = {
 	'保存失败，重试': 'Save failed, retry',
 	'周报': 'Report',
 	'切换主题': 'Toggle theme',
+	'项目主页': 'Project homepage',
 
 	// Filters
 	'全部': 'All',
