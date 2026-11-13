@@ -27,7 +27,7 @@
 		await app.goRelative(1);
 	}
 
-	const githubUrl = 'https://github.com/uiautodev/weektodo';
+	const githubUrl = 'https://github.com/codeskyblue/weektodo';
 
 	const versionLabel = $derived.by(() => {
 		const version = app.meta?.version?.trim();
