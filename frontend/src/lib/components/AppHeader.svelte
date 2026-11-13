@@ -13,6 +13,7 @@
 	import { app } from '#lib/app.svelte';
 	import { i18n, t } from '#lib/i18n.svelte';
 	import { formatRange, formatWeekTitle } from '#lib/date';
+	import { openExternal } from '#lib/wails';
 	import Logo from './Logo.svelte';
 	import { Button } from '#lib/components/ui/button/index.js';
 	import { Progress } from '#lib/components/ui/progress/index.js';
@@ -25,6 +26,8 @@
 	async function next(): Promise<void> {
 		await app.goRelative(1);
 	}
+
+	const githubUrl = 'https://github.com/uiautodev/weektodo';
 
 	const versionLabel = $derived.by(() => {
 		const version = app.meta?.version?.trim();
@@ -260,6 +263,26 @@
 						</DropdownMenu.Content>
 					</DropdownMenu.Root>
 				</div>
+				<Button
+					variant="ghost"
+					size="icon-sm"
+					class="hidden sm:inline-flex"
+					href={githubUrl}
+					target="_blank"
+					rel="noopener noreferrer"
+					title={t('项目主页')}
+					aria-label={t('项目主页')}
+					onclick={(event) => {
+						event.preventDefault();
+						openExternal(githubUrl);
+					}}
+				>
+					<svg viewBox="0 0 24 24" fill="currentColor" class="size-4" aria-hidden="true">
+						<path
+							d="M12 .5C5.65.5.5 5.65.5 12a11.5 11.5 0 0 0 7.86 10.92c.58.1.79-.25.79-.55v-2.16c-3.2.7-3.88-1.36-3.88-1.36-.53-1.33-1.28-1.69-1.28-1.69-1.05-.71.08-.7.08-.7 1.16.08 1.77 1.19 1.77 1.19 1.03 1.76 2.7 1.25 3.36.96.1-.75.4-1.25.73-1.54-2.55-.29-5.24-1.28-5.24-5.68 0-1.26.45-2.28 1.19-3.09-.12-.29-.52-1.46.11-3.05 0 0 .96-.31 3.15 1.18a10.9 10.9 0 0 1 5.74 0c2.19-1.49 3.15-1.18 3.15-1.18.63 1.59.23 2.76.11 3.05.74.81 1.19 1.83 1.19 3.09 0 4.41-2.7 5.38-5.26 5.67.41.36.78 1.06.78 2.14v3.17c0 .3.21.66.8.55A11.5 11.5 0 0 0 23.5 12C23.5 5.65 18.35.5 12 .5Z"
+						/>
+					</svg>
+				</Button>
 			</div>
 		</div>
 	</div>
